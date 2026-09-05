@@ -1,0 +1,14 @@
+{
+  "domain": "dreame_hold",
+  "name": "Dreame Hold",
+  "codeowners": ["@chrimi"],
+  "config_flow": true,
+  "documentation": "https://github.com/chrimi/dreame-hold",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/chrimi/dreame-hold/issues",
+  "requirements": [
+    "requests",
+    "paho-mqtt>=2.0.0"
+  ],
+  "version": "0.1.0"
+}

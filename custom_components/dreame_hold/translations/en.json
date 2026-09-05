@@ -1,0 +1,30 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect your Dreame account",
+        "description": "Log in with your Dreame (or MOVA) app account. If you normally sign in via 'Sign in with Google' or another third-party login, that won't work here — open the app's profile/security settings first and set a password for your account, then use that email + password below.",
+        "data": {
+          "username": "Email",
+          "password": "Password",
+          "country": "Server region",
+          "account_type": "Account type"
+        }
+      },
+      "device": {
+        "title": "Select your device",
+        "description": "Multiple handheld devices were found on this account.",
+        "data": {
+          "device_id": "Device"
+        }
+      }
+    },
+    "error": {
+      "login_error": "Could not log in. Check your email/password and region — or, if you use Google/third-party sign-in, set a password for your account in the app first.",
+      "no_devices": "No handheld (H-series) devices were found on this account."
+    },
+    "abort": {
+      "already_configured": "This device is already configured."
+    }
+  }
+}
