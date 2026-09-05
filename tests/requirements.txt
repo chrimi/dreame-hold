@@ -1,0 +1,8 @@
+# Deliberately does NOT include homeassistant / pytest-homeassistant-custom-component.
+# These tests cover dreame_cloud/ (mocked HTTP) and the pure-Python helpers
+# in helpers.py and dev/probe_properties.py only - see README.md's
+# "Unit tests" section for why the HA-dependent entity classes aren't
+# covered here.
+pytest
+requests
+paho-mqtt>=2.0.0

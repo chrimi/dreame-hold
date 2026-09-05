@@ -8,7 +8,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE, EntityCategory
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -16,12 +16,17 @@ from .const import (
     DOMAIN,
     PROP_ACTIVITY_PROGRESS,
     PROP_BATTERY_LEVEL,
+    PROP_LAST_RUN_DURATION,
+    PROP_SOILING_HEAVY,
+    PROP_SOILING_LIGHT,
+    PROP_SOILING_MODERATE,
     PROP_STATUS,
     PROP_STATUS_MIRROR,
     STATUS_NAMES,
 )
 from .coordinator import DreameHoldDataUpdateCoordinator
 from .entity import DreameHoldEntity
+from .helpers import soiling_percentages
 
 BATTERY_DESCRIPTION = SensorEntityDescription(
     key="battery_level",
@@ -47,6 +52,36 @@ PROGRESS_DESCRIPTION = SensorEntityDescription(
     entity_category=EntityCategory.DIAGNOSTIC,
 )
 
+LAST_RUN_DURATION_DESCRIPTION = SensorEntityDescription(
+    key="last_run_duration",
+    name="Last cleaning run duration",
+    device_class=SensorDeviceClass.DURATION,
+    native_unit_of_measurement=UnitOfTime.SECONDS,
+    state_class=SensorStateClass.MEASUREMENT,
+    entity_category=EntityCategory.DIAGNOSTIC,
+)
+
+SOILING_LIGHT_DESCRIPTION = SensorEntityDescription(
+    key="soiling_light",
+    name="Last run soiling: light",
+    native_unit_of_measurement=PERCENTAGE,
+    entity_category=EntityCategory.DIAGNOSTIC,
+)
+
+SOILING_MODERATE_DESCRIPTION = SensorEntityDescription(
+    key="soiling_moderate",
+    name="Last run soiling: moderate",
+    native_unit_of_measurement=PERCENTAGE,
+    entity_category=EntityCategory.DIAGNOSTIC,
+)
+
+SOILING_HEAVY_DESCRIPTION = SensorEntityDescription(
+    key="soiling_heavy",
+    name="Last run soiling: heavy",
+    native_unit_of_measurement=PERCENTAGE,
+    entity_category=EntityCategory.DIAGNOSTIC,
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
@@ -57,6 +92,10 @@ async def async_setup_entry(
             DreameHoldBatterySensor(coordinator),
             DreameHoldStatusSensor(coordinator),
             DreameHoldProgressSensor(coordinator),
+            DreameHoldLastRunDurationSensor(coordinator),
+            DreameHoldSoilingSensor(coordinator, SOILING_LIGHT_DESCRIPTION, PROP_SOILING_LIGHT),
+            DreameHoldSoilingSensor(coordinator, SOILING_MODERATE_DESCRIPTION, PROP_SOILING_MODERATE),
+            DreameHoldSoilingSensor(coordinator, SOILING_HEAVY_DESCRIPTION, PROP_SOILING_HEAVY),
         ]
     )
 
@@ -122,3 +161,59 @@ class DreameHoldProgressSensor(DreameHoldEntity, SensorEntity):
     @property
     def native_value(self) -> int | None:
         return self._property(PROP_ACTIVITY_PROGRESS)
+
+
+class DreameHoldLastRunDurationSensor(DreameHoldEntity, SensorEntity):
+    """Duration of the last vacuuming run. Confirmed exactly against an
+    owner-reported run (364s = 6 min 4 sec) — see FINDINGS.md."""
+
+    entity_description = LAST_RUN_DURATION_DESCRIPTION
+
+    def __init__(self, coordinator: DreameHoldDataUpdateCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.device.device_id}_{self.entity_description.key}"
+
+    @property
+    def native_value(self) -> int | None:
+        return self._property(PROP_LAST_RUN_DURATION)
+
+
+class DreameHoldSoilingSensor(DreameHoldEntity, SensorEntity):
+    """Percentage of the last run spent on light/moderate/heavy soiling.
+
+    Computed from the raw seconds properties using the same "floor the
+    first two, remainder to the last" convention the app itself uses —
+    confirmed to reproduce the app's own displayed breakdown (84%/14%/2%)
+    exactly, which independent per-value rounding wouldn't guarantee
+    (the three values wouldn't always sum to 100).
+    """
+
+    def __init__(
+        self,
+        coordinator: DreameHoldDataUpdateCoordinator,
+        description: SensorEntityDescription,
+        prop: tuple[int, int],
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._prop = prop
+        self._attr_unique_id = f"{coordinator.device.device_id}_{description.key}"
+
+    @property
+    def native_value(self) -> int | None:
+        light = self._property(PROP_SOILING_LIGHT)
+        moderate = self._property(PROP_SOILING_MODERATE)
+        heavy = self._property(PROP_SOILING_HEAVY)
+        if light is None or moderate is None or heavy is None:
+            return None
+
+        percentages = soiling_percentages(light, moderate, heavy)
+        if percentages is None:
+            return None
+        light_pct, moderate_pct, heavy_pct = percentages
+
+        if self._prop == PROP_SOILING_LIGHT:
+            return light_pct
+        if self._prop == PROP_SOILING_MODERATE:
+            return moderate_pct
+        return heavy_pct

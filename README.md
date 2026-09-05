@@ -8,7 +8,7 @@ the [dreame-mower](https://github.com/antondaubert/dreame-mower) forks have
 to it for lawn mowers. See NOTICE.md for full provenance.
 
 **Status: early / v1.** Confirmed working against one device (H14 Pro,
-model `dreame.hold.w2306f`). Entities:
+model `dreame.hold.w2306f`). Read-only status entities:
 
 - `sensor.<name>_battery` — battery level (%)
 - `binary_sensor.<name>_charging` — on while the device reports the raw
@@ -19,6 +19,21 @@ model `dreame.hold.w2306f`). Entities:
   code as an attribute
 - `sensor.<name>_activity_progress` — progress % while self-clean or drying
   is running
+- `sensor.<name>_last_run_duration` — duration of the last vacuuming run
+- `sensor.<name>_soiling_light` / `_soiling_moderate` / `_soiling_heavy` —
+  % of the last run spent on each soiling level (matches the app's own
+  reported breakdown exactly)
+
+Settings entities — these *write* to the device (via
+`DreameCloudDevice.set_property`), the same mechanism
+`Tasshack/dreame-vacuum` uses to be a full app replacement rather than a
+read-only integration:
+
+- `switch.<name>_light`, `_auto_self_clean`, `_auto_drying`,
+  `_custom_cleaning_mode`, `_prepare_electrolyzed_water`
+- `select.<name>_drying_mode`, `_voice_language`, `_suction_power`,
+  `_water_level`, `_cleaning_mode`, `_propulsion_force`
+- `number.<name>_voice_volume`
 
 See `custom_components/dreame_hold/const.py` for the exact siid/piid
 property map and its confidence level, and [`FINDINGS.md`](FINDINGS.md) for
@@ -97,6 +112,14 @@ pip install -r requirements.txt
 python3 list_devices.py                          # find your device's `did`
 python3 probe_properties.py --device-id <did>     # sweep siid/piid -> logs/probe_*.json
 python3 diff_snapshots.py logs/A.json logs/B.json # compare two snapshots
+python3 check_firmware.py --device-id <did>       # firmware version (separate OTA API call, not a siid/piid property)
+```
+
+Once you know which siids actually respond on your device, skip sweeping
+the empty ones with `--siids` (comma-separated values/ranges):
+
+```bash
+python3 probe_properties.py --device-id <did> --siids 1-8,16,17,19
 ```
 
 Change exactly one thing about the device's physical state between two
@@ -104,8 +127,39 @@ probes (dock it, start self-clean, empty the water tank, ...) and diff —
 whatever changed is almost certainly tied to that state change. See
 `FINDINGS.md` for the full log of what's been tried and found so far.
 
+## Unit tests
+
+```bash
+pip install -r tests/requirements.txt
+python -m pytest tests/ -v
+```
+
+Deliberately scoped to pure Python with **no Home Assistant dependency**:
+`dreame_cloud/` (login, get/set_property, error handling — with the HTTP
+layer mocked, no real network calls) and the standalone helpers in
+`helpers.py` and `dev/probe_properties.py`. This is a smaller scope than
+[antondaubert/dreame-mower](https://github.com/antondaubert/dreame-mower)'s
+test suite, which additionally covers the HA entity classes themselves via
+`pytest-homeassistant-custom-component` — a much heavier dependency,
+skipped here deliberately. The sensor/switch/select/number entity classes
+in this repo are consequently *not* covered by these tests; they're kept
+deliberately thin (mostly reading/writing a single property) precisely so
+that the untested surface stays small. Runs on push/PR via
+`.github/workflows/test.yml`.
+
 ## Known limitations / open items
 
+- **The write path (switch/select/number entities) has not been tested
+  against a real device.** Every property in this integration was
+  discovered and verified by *reading* (`get_properties` via
+  `dev/probe_properties.py`) — the app's own UI made every settings
+  change during probing, never `DreameCloudDevice.set_property`. The read
+  side (sensors, binary_sensor) is confirmed working; whether `set_property`
+  calls with these siid/piid/value combinations actually work has not been
+  checked. Unit tests cover `set_property` being *called* correctly (see
+  "Unit tests" above) but can't confirm the device actually accepts these
+  particular values, since they mock the HTTP layer rather than hitting
+  a real device.
 - Only one physical device (H14 Pro) has been used to build the property
   map — other `dreame.hold.*`/`mova.hold.*` models may expose different
   siid/piid numbers or additional status codes. The status sensor falls
@@ -121,6 +175,15 @@ whatever changed is almost certainly tied to that state change. See
   the response shape generically rather than from documented field names
   (all field names are obfuscated in the upstream cloud API) — flag it if
   device discovery fails on an account with an unusual structure.
+- `dev/check_firmware.py`'s `description` field (release notes text) comes
+  back as a cloud error blob ("missing required parameter: lang")
+  regardless of passing `--lang` in the body or as a query parameter
+  (`--lang-in-query`) — `curVersion`/`hasNewFirmware` still work fine.
+  Undocumented server-side requirement, not pursued further.
+- "Detergent Proportioning Mode" (same settings screen as "Self
+  propulsion force adjustment", `23:1`) hasn't been located — checked
+  siid 1-20/piid 1-250 and siid 20-30/piid 1-20, nothing changed in
+  either. See FINDINGS.md's "Known issue" section.
 
 ## License
 

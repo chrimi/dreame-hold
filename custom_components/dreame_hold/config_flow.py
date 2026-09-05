@@ -20,12 +20,7 @@ from .const import (
     LOGGER,
 )
 from .dreame_cloud.cloud_base import DreameCloudBase
-
-# A device belongs to the H-series handheld line if its model string
-# contains this marker (e.g. "dreame.hold.w2306f", confirmed on an H14 Pro).
-# Other handheld models/regions may use a different marker; widen this if a
-# real device turns up that doesn't match.
-HOLD_MODEL_MARKER = ".hold."
+from .helpers import extract_hold_devices
 
 
 class DreameHoldConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -62,7 +57,7 @@ class DreameHoldConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "login_error"
             else:
                 devices_response = await self.hass.async_add_executor_job(cloud.get_devices)
-                self._devices = _extract_hold_devices(devices_response)
+                self._devices = extract_hold_devices(devices_response)
                 if not self._devices:
                     errors["base"] = "no_devices"
                 elif len(self._devices) == 1:
@@ -116,27 +111,3 @@ class DreameHoldConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_MODEL: model,
             },
         )
-
-
-def _extract_hold_devices(devices_response: Any) -> list[dict[str, Any]]:
-    """Pull the flat device list out of the cloud's getDevices response and
-    keep only handheld ("hold") models.
-
-    The response shape mirrors dreame-vacuum's/dreame-mower's cloud API:
-    a dict with a nested list of device dicts, each with at least
-    'did' and 'model'. Structure confirmed via dev/list_devices.py; adjust
-    here if a differently-shaped account ever turns up.
-    """
-    if not isinstance(devices_response, dict):
-        return []
-
-    candidates: list[dict[str, Any]] = []
-    for value in devices_response.values():
-        if isinstance(value, dict):
-            for inner in value.values():
-                if isinstance(inner, list):
-                    candidates.extend(item for item in inner if isinstance(item, dict) and "did" in item)
-        elif isinstance(value, list):
-            candidates.extend(item for item in value if isinstance(item, dict) and "did" in item)
-
-    return [d for d in candidates if HOLD_MODEL_MARKER in str(d.get("model", ""))]

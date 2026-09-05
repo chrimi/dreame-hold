@@ -8,7 +8,13 @@ from homeassistant.core import HomeAssistant
 from .const import DOMAIN
 from .coordinator import DreameHoldDataUpdateCoordinator
 
-PLATFORMS = (Platform.SENSOR, Platform.BINARY_SENSOR)
+PLATFORMS = (
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+    Platform.SWITCH,
+    Platform.SELECT,
+    Platform.NUMBER,
+)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

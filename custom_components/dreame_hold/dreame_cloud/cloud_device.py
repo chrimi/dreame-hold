@@ -30,6 +30,10 @@ class ActionIdentifier(NamedTuple):
     aiid: int
     name: str
 
+    def matches(self, siid: int, aiid: int) -> bool:
+        """Check if given siid and aiid match this action identifier."""
+        return self.siid == siid and self.aiid == aiid
+
 
 class DreameCloudDevice:
     _mqtt_message_callback: Optional[Callable[[Dict[str, Any]], None]]
@@ -403,8 +407,27 @@ class DreameCloudDevice:
             return None
         return api_response["data"]
 
-    def check_device_version(self) -> Any:
-        """Query the cloud OTA service for firmware update availability."""
+    def check_device_version(self, lang: Optional[str] = None, lang_in_query: bool = False) -> Any:
+        """Query the cloud OTA service for firmware update availability.
+
+        Without `lang`, the response's `description` field is an error
+        blob ("缺少必要的请求参数: lang" - "missing required parameter:
+        lang") instead of release notes text; this appears to be a
+        pre-existing quirk in the upstream cloud_device.py this was
+        adapted from too, not something introduced here. The parameter
+        name is confirmed by that error message; the expected value
+        format (e.g. "en", "en_US", "de") is not confirmed - pass one
+        and see what comes back.
+
+        Neither placement has been observed to work: passing `lang` in
+        the JSON body (the default) and passing it as a URL query
+        parameter (`lang_in_query=True`, `?lang=...`) both still returned
+        the same "missing lang" error blob in testing (tried with "en"
+        and "en_US"). Kept as a documented, unresolved limitation rather
+        than pursued further — likely a pre-existing server-side quirk in
+        this cloud endpoint, not something fixable from the client side
+        without more information about what it actually expects.
+        """
         if not self._cloud_base.connected:
             _LOGGER.info("check_device_version: Not connected. Attempting to connect.")
             self._cloud_base.connect()
@@ -412,10 +435,15 @@ class DreameCloudDevice:
         if not self._cloud_base.connected:
             raise ConnectionError("check_device_version: Unable to connect. Connection failed.")
 
-        api_response = self._cloud_base._api_call(
-            f"{self._cloud_base._api_strings[23]}/{self._cloud_base._api_strings[24]}/checkDeviceVersion",
-            {"did": self._device_id},
-        )
+        params = {"did": self._device_id}
+        path = f"{self._cloud_base._api_strings[23]}/{self._cloud_base._api_strings[24]}/checkDeviceVersion"
+        if lang:
+            if lang_in_query:
+                path = f"{path}?lang={lang}"
+            else:
+                params["lang"] = lang
+
+        api_response = self._cloud_base._api_call(path, params)
         if api_response is None or "data" not in api_response:
             return None
         return api_response["data"]

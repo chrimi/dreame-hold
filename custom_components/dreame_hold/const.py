@@ -61,10 +61,85 @@ PROP_SELFCLEAN_ELAPSED: Final = (1, 57)
 """Elapsed seconds of the last self-clean run. 0 before any self-clean,
 otherwise frozen at the value reached when self-clean last ran."""
 
-# Batch of properties polled every coordinator refresh. Kept small and
-# specific (rather than re-sweeping the full siid/piid space) to avoid
-# hammering the cloud API on every poll — use dev/probe_properties.py
-# separately to explore further properties.
+PROP_LAST_RUN_DURATION: Final = (1, 22)
+"""Duration (seconds) of the last vacuuming run. Confirmed exactly against
+an owner-reported run: 364 = 6 min 4 sec. Resets to 0 for the next
+operation (self-clean, etc.), unlike the frozen 1:64/1:65/1:66 below."""
+
+PROP_SOILING_LIGHT: Final = (1, 64)
+PROP_SOILING_MODERATE: Final = (1, 65)
+PROP_SOILING_HEAVY: Final = (1, 66)
+"""Time (seconds) spent on light/moderate/heavy soiling during the last
+vacuum run. PROP_SOILING_LIGHT + _MODERATE + _HEAVY == PROP_LAST_RUN_DURATION
+exactly (307+54+3=364), and their floor-percentages match the app's own
+reported breakdown (84%/14%/2%) via the "remainder to last" display
+convention. Frozen (like PROP_LAST_RUN_DURATION's siblings) until the next
+vacuum run."""
+
+PROP_LIGHT_SWITCH: Final = (1, 3)
+"""Device light on/off: 0=off, 1=on. Confirmed bidirectionally."""
+
+PROP_VOICE_VOLUME: Final = (1, 14)
+"""Voice announcement volume, 0-100 (presumed scale). Confirmed
+bidirectionally (0 <-> 30 in testing)."""
+
+PROP_VOICE_LANGUAGE: Final = (1, 17)
+"""Voice announcement language. See LANGUAGE_NAMES. Fixed internal
+language-ID table with gaps, not sequential app-menu order."""
+
+PROP_AUTO_SELFCLEAN_DISABLED: Final = (1, 7)
+"""'Automatische Selbstreinigung' disabled flag: 0=on, 1=off."""
+
+PROP_AUTO_DRYING_DISABLED: Final = (1, 9)
+"""'Automatische Walzenbürstentrocknung' disabled flag: 0=on, 1=off.
+Turning this off also resets PROP_SCHEDULED_DRYING_TIME/_WEEKDAYS to 0 -
+the schedule is a child of this setting, not independent."""
+
+PROP_DRYING_MODE: Final = (1, 8)
+PROP_DRYING_MODE_MIRROR: Final = (1, 10)
+"""'Trocknungsmodus': see DRYING_MODE_NAMES. Mirrored at two piids like
+PROP_STATUS/PROP_STATUS_MIRROR; write both when setting."""
+
+PROP_SCHEDULED_DRYING_TIME: Final = (1, 12)
+"""Scheduled drying start time, seconds since midnight (54000 = 15:00:00
+exactly). 0 when no schedule is set."""
+
+PROP_SCHEDULED_DRYING_WEEKDAYS: Final = (1, 13)
+"""Scheduled drying repeat pattern as an 8-digit string (transmitted as an
+int, so a leading 0 is dropped in the raw value): digit 0 = "one-time, no
+repeat" flag, digits 1-7 = Mon..Sun enabled. Not currently exposed as an
+entity - encoding/writing this correctly (plus its parent-toggle
+interaction with PROP_AUTO_DRYING_DISABLED) needs more care than the
+simple enums below."""
+
+PROP_SUCTION_POWER: Final = (16, 1)
+"""'Saugleistung': see SUCTION_POWER_NAMES."""
+
+PROP_WATER_LEVEL: Final = (16, 2)
+"""'Wasserstand': see WATER_LEVEL_NAMES. Sticky - keeps its last value
+when switching to a preset cleaning mode rather than always resetting."""
+
+PROP_CUSTOM_MODE_ENABLED: Final = (16, 6)
+"""'Benutzerdefiniert' master on/off flag for the cleaning-mode area:
+0=off, 1=on. Confirmed via isolated test."""
+
+PROP_CLEANING_MODE: Final = (16, 7)
+"""Active cleaning sub-mode: see CLEANING_MODE_NAMES. Sticky - keeps its
+last value even after PROP_CUSTOM_MODE_ENABLED is turned off."""
+
+PROP_ELECTROLYZED_WATER_DISABLED: Final = (16, 3)
+"""'Prepare Electrolyzed Water' disabled flag: 0=on, 1=off. Confidence:
+likely, not cleanly isolated (changed alongside PROP_CUSTOM_MODE_ENABLED
+in the one test done so far) - see FINDINGS.md."""
+
+PROP_PROPULSION_FORCE: Final = (23, 1)
+"""'Self propulsion force adjustment': see PROPULSION_FORCE_NAMES. Only
+found by widening the sweep to siid 23 - not present in siid 1-20."""
+
+# Batch of properties polled every coordinator refresh. Kept to properties
+# we actually expose as entities (rather than re-sweeping the full
+# siid/piid space) to avoid hammering the cloud API on every poll — use
+# dev/probe_properties.py separately to explore further properties.
 POLLED_PROPERTIES: Final = [
     PROP_BATTERY_LEVEL,
     PROP_STATUS,
@@ -72,7 +147,57 @@ POLLED_PROPERTIES: Final = [
     PROP_ACTIVITY_PROGRESS,
     PROP_ACTIVITY_DURATION,
     PROP_SELFCLEAN_ELAPSED,
+    PROP_LAST_RUN_DURATION,
+    PROP_SOILING_LIGHT,
+    PROP_SOILING_MODERATE,
+    PROP_SOILING_HEAVY,
+    PROP_LIGHT_SWITCH,
+    PROP_VOICE_VOLUME,
+    PROP_VOICE_LANGUAGE,
+    PROP_AUTO_SELFCLEAN_DISABLED,
+    PROP_AUTO_DRYING_DISABLED,
+    PROP_DRYING_MODE,
+    PROP_DRYING_MODE_MIRROR,
+    PROP_SUCTION_POWER,
+    PROP_WATER_LEVEL,
+    PROP_CUSTOM_MODE_ENABLED,
+    PROP_CLEANING_MODE,
+    PROP_ELECTROLYZED_WATER_DISABLED,
+    PROP_PROPULSION_FORCE,
 ]
+
+# --- Enums for the settings entities ----------------------------------------
+# All empirically observed on one H14 Pro (dreame.hold.w2306f) via dev/
+# probing - see FINDINGS.md. Values not in these maps surface as a
+# generic fallback rather than erroring (other models/firmware/regions
+# likely expose values not seen here, e.g. more languages).
+
+DRYING_MODE_NAMES: Final[dict[int, str]] = {2: "quiet", 3: "super_speed"}
+
+SUCTION_POWER_NAMES: Final[dict[int, str]] = {1: "light", 2: "standard", 3: "strong"}
+
+WATER_LEVEL_NAMES: Final[dict[int, str]] = {1: "daily", 2: "level_2", 3: "wet"}
+"""'level_2' is a placeholder - only confirmed as an implied value under
+"Leiser Modus", the app never showed an explicit label for it."""
+
+CLEANING_MODE_NAMES: Final[dict[int, str]] = {1: "quiet", 3: "turbo", 4: "personalized"}
+"""Value 2 not yet observed."""
+
+PROPULSION_FORCE_NAMES: Final[dict[int, str]] = {0: "balanced", 1: "soft", 2: "strong"}
+
+LANGUAGE_NAMES: Final[dict[int, str]] = {
+    2: "english",
+    3: "german",
+    4: "french",
+    6: "italian",
+    7: "spanish",
+    13: "arabic",
+    14: "hebrew",
+    16: "dutch",
+}
+"""Fixed internal language-ID table with gaps (not sequential app-menu
+order) - these 8 are all the languages this app/device offered to
+select, not necessarily all values the property can hold."""
 
 # --- Status code enum --------------------------------------------------------
 # Empirically observed on one H14 Pro (dreame.hold.w2306f). Codes not in this
