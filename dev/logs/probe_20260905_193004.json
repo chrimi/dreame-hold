@@ -1,0 +1,135 @@
+{
+  "timestamp": "2026-09-05T19:30:04.955168+02:00",
+  "device_id": "-114884794",
+  "model": "dreame.hold.w2306f",
+  "siids": [
+    23
+  ],
+  "piid_range": [
+    1,
+    20
+  ],
+  "results": [
+    {
+      "siid": 23,
+      "piid": 1,
+      "code": 0,
+      "status": "ok",
+      "value": 0
+    },
+    {
+      "siid": 23,
+      "piid": 2,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 3,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 4,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 5,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 6,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 7,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 8,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 9,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 10,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 11,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 12,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 13,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 14,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 15,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 16,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 17,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 18,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 19,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 20,
+      "code": -1,
+      "status": "error"
+    }
+  ]
+}

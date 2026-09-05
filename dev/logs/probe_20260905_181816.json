@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-09-05T18:18:16.799883+02:00",
+  "device_id": "-114884794",
+  "model": "dreame.hold.w2306f",
+  "siids": [
+    1
+  ],
+  "piid_range": [
+    17,
+    17
+  ],
+  "results": [
+    {
+      "siid": 1,
+      "piid": 17,
+      "code": 0,
+      "status": "ok",
+      "value": 14
+    }
+  ]
+}

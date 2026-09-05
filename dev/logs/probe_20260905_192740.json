@@ -1,0 +1,75 @@
+{
+  "timestamp": "2026-09-05T19:27:40.089755+02:00",
+  "device_id": "-114884794",
+  "model": "dreame.hold.w2306f",
+  "siids": [
+    23
+  ],
+  "piid_range": [
+    1,
+    10
+  ],
+  "results": [
+    {
+      "siid": 23,
+      "piid": 1,
+      "code": 0,
+      "status": "ok",
+      "value": 2
+    },
+    {
+      "siid": 23,
+      "piid": 2,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 3,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 4,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 5,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 6,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 7,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 8,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 9,
+      "code": -1,
+      "status": "error"
+    },
+    {
+      "siid": 23,
+      "piid": 10,
+      "code": -1,
+      "status": "error"
+    }
+  ]
+}

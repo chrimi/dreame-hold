@@ -10,6 +10,7 @@ Usage:
     python3 dev/probe_properties.py --device-id 123456789
     python3 dev/probe_properties.py --device-id 123456789 --siid-max 10 --piid-max 50
     python3 dev/probe_properties.py --device-id 123456789 --siid 2 --piid-max 100
+    python3 dev/probe_properties.py --device-id 123456789 --siids 1-8,16,17,19
 
 Results are printed to stdout and saved to dev/logs/probe_<TIMESTAMP>.json
 
@@ -40,9 +41,25 @@ VALID_COUNTRIES = ["eu", "cn", "us", "ru", "sg"]
 VALID_ACCOUNT_TYPES = ["dreame", "mova"]
 
 
-def probe(device: DreameCloudDevice, siid_range: range, piid_range: range) -> list[dict[str, Any]]:
+def parse_int_spec(spec: str) -> list[int]:
+    """Parse "1-8,16,17,19" into [1,2,3,4,5,6,7,8,16,17,19] (sorted, deduped)."""
+    values: set[int] = set()
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            start_str, end_str = part.split("-", 1)
+            start, end = int(start_str), int(end_str)
+            values.update(range(start, end + 1))
+        else:
+            values.add(int(part))
+    return sorted(values)
+
+
+def probe(device: DreameCloudDevice, siids: list[int], piid_range: range) -> list[dict[str, Any]]:
     """Sweep all (siid, piid) pairs and return a list of result dicts."""
-    pairs = [(s, p) for s in siid_range for p in piid_range]
+    pairs = [(s, p) for s in siids for p in piid_range]
     results: list[dict[str, Any]] = []
 
     for batch_start in range(0, len(pairs), BATCH_SIZE):
@@ -105,6 +122,13 @@ def main() -> None:
     parser.add_argument("--country", default=None, choices=VALID_COUNTRIES)
     parser.add_argument("--account-type", default=None, choices=VALID_ACCOUNT_TYPES)
     parser.add_argument("--device-id", required=True, help="'did' of the device, from list_devices.py")
+    parser.add_argument(
+        "--siids",
+        default=None,
+        help="siids to probe, e.g. '1-8,16,17,19' (comma-separated values and/or ranges). "
+        "Skips the empty siids in between instead of sweeping every value from min to max. "
+        "Overrides --siid/--siid-min/--siid-max when given.",
+    )
     parser.add_argument("--siid", type=int, default=None, help="Probe only this siid")
     parser.add_argument("--siid-min", type=int, default=1, help="First siid to probe (default: 1)")
     parser.add_argument("--siid-max", type=int, default=8, help="Last siid to probe (default: 8)")
@@ -132,13 +156,18 @@ def main() -> None:
         sys.exit(1)
     print(f"Connected. host={device._host} model={device._model}\n")
 
-    siid_range = range(args.siid, args.siid + 1) if args.siid else range(args.siid_min, args.siid_max + 1)
+    if args.siids:
+        siids = parse_int_spec(args.siids)
+    elif args.siid:
+        siids = [args.siid]
+    else:
+        siids = list(range(args.siid_min, args.siid_max + 1))
     piid_range = range(args.piid_min, args.piid_max + 1)
 
-    print(f"Probing siid={list(siid_range)}, piid={args.piid_min}..{args.piid_max} "
-          f"({len(siid_range) * len(piid_range)} pairs in batches of {BATCH_SIZE})\n")
+    print(f"Probing siid={siids}, piid={args.piid_min}..{args.piid_max} "
+          f"({len(siids) * len(piid_range)} pairs in batches of {BATCH_SIZE})\n")
 
-    results = probe(device, siid_range, piid_range)
+    results = probe(device, siids, piid_range)
 
     supported = [r for r in results if r["status"] == "ok"]
     print(f"\n{'='*60}")
@@ -161,7 +190,7 @@ def main() -> None:
                 "timestamp": datetime.now().astimezone().isoformat(),
                 "device_id": args.device_id,
                 "model": device._model,
-                "siid_range": [siid_range.start, siid_range.stop - 1],
+                "siids": siids,
                 "piid_range": [piid_range.start, piid_range.stop - 1],
                 "results": results,
             },
