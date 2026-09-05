@@ -29,12 +29,18 @@ async def async_setup_entry(
 
 
 class DreameHoldChargingBinarySensor(DreameHoldEntity, BinarySensorEntity):
-    """True exactly while the device is drawing charge current.
+    """True while the device reports STATUS_CHARGING.
 
-    This is the intended trigger for a "cut power to the charging smart
-    plug once charging is done" automation: turns off as soon as the
-    status leaves STATUS_CHARGING (e.g. to docked_idle once full), so the
-    plug isn't kept live on trickle/maintenance charge indefinitely.
+    CAUTION: do not use this alone as a "cut power once charging is done"
+    automation trigger. FINDINGS.md documents two snapshots at genuine,
+    owner-confirmed 100% battery ~1h apart where this flipped true then
+    false then (implicitly) true again — the charge controller appears to
+    issue brief maintenance/top-off pulses even once full, so this sensor
+    can turn back on after the battery already reached 100%. For a smart-
+    plug cutoff automation, trigger on `sensor.<name>_battery` reaching
+    100 and staying there for a sustained window (e.g. HA's trigger `for:`
+    with 20-30 minutes) instead — that rides through these pulses. This
+    sensor remains useful as a live diagnostic of the raw reported state.
     """
 
     entity_description = CHARGING_DESCRIPTION

@@ -11,9 +11,9 @@ to it for lawn mowers. See NOTICE.md for full provenance.
 model `dreame.hold.w2306f`). Entities:
 
 - `sensor.<name>_battery` — battery level (%)
-- `binary_sensor.<name>_charging` — on exactly while the device is drawing
-  charge current; the intended trigger for "cut power to the charging smart
-  plug once charging is done" automations
+- `binary_sensor.<name>_charging` — on while the device reports the raw
+  "charging" status code; **not** a reliable "charging is fully done"
+  signal by itself (see below)
 - `sensor.<name>_status` — decoded activity status (idle / charging /
   self_cleaning / drying / docked_idle / unknown), with the raw numeric
   code as an attribute
@@ -25,6 +25,30 @@ property map and its confidence level, and [`FINDINGS.md`](FINDINGS.md) for
 the snapshot-by-snapshot evidence behind each one. Properties beyond what's
 listed there are unmapped — use the probing tools in [`dev/`](dev/) to
 explore further and extend `const.py`/`sensor.py` accordingly.
+
+### Building a "cut power once charging is done" automation
+
+`binary_sensor.<name>_charging` looked like the obvious trigger for
+switching off a charging smart plug, but FINDINGS.md documents two
+snapshots ~1h apart, both at owner-confirmed 100% battery, where the raw
+status flipped between "charging" and "resting" — the charge controller
+appears to issue brief maintenance top-off pulses even once full, which
+would make the plug flap on/off (or never turn off) if you trigger on this
+sensor directly.
+
+Trigger on the battery level reaching 100 and **staying there**, instead:
+
+```yaml
+trigger:
+  - platform: numeric_state
+    entity_id: sensor.<name>_battery
+    above: 99  # or "attribute: state" == 100, matching your device
+    for: "00:20:00"  # rides through brief maintenance-charging pulses
+action:
+  - service: switch.turn_off
+    target:
+      entity_id: switch.<your_charging_smart_plug>
+```
 
 ## Installation
 
