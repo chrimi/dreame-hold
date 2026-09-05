@@ -24,6 +24,7 @@ snapshots), **likely** (consistent pattern across 2 snapshots), **guess**
 | `1:22` | Live runtime counter of the *current* operation (vacuuming specifically) | guess | `0` while idle/charging; `364` right after vacuuming (plausibly seconds of that run); back to `0` during self-clean. Distinct from the frozen `1:64` etc. — this one looks like it resets per new operation rather than persisting. |
 | `1:31` | Drying-specific sub-value (temperature/fan stage?) | guess | `0` everywhere except during drying, where it was `3`. |
 | `1:32` | Unknown — possibly time-since-last-full-cycle or a health stat | guess | `0` until the final idle-on-dock-after-cycle snapshot, where it became `59`. |
+| `1:8` and `1:10` | **Drying mode setting** (quiet / super-speed / ...) | likely | Both jumped together from `2` to `3` when "Trocknungsmodus" was changed from "leiser Modus" to "Super-Speed-Modus" in the app, mirrored at two piids like the `2:1`/`1:28` status pair. Only one transition observed so far — not yet confirmed to toggle back. |
 
 ## Ruled out
 
@@ -43,6 +44,16 @@ synced to the cloud during an active charging or use session, while a
 smaller set of values (battery %, drying-timer defaults, etc.) are cached
 independently. Not fully pinned down — noted here so it isn't re-discovered
 from scratch later.
+
+The 160824 snapshot contains 6 duplicate `(siid, piid)` entries — `1:28,
+1:29, 1:56, 1:57, 2:1, 3:1` each appear twice, both times with identical
+values, appended out of sequence around result index 560-565 (not at
+their natural position in the siid/piid sweep order). Harmless — these
+are exactly the properties `dev/diff_snapshots.py`/the coordinator care
+about, and both copies agree — but worth noting in case it recurs: the
+cloud API appears to sometimes echo a "core status" bundle (battery,
+activity status, timers) as a bonus alongside an unrelated batch
+response.
 
 `siid 6` and `siid 7` are structurally identical (`piid 1`, `6`, `7` with
 the same values in both, drifting down by only ~1 unit per several minutes
@@ -101,3 +112,4 @@ self-clean/drying activity).
 | 14:17:38 | On dock, idle, self-clean+dry cycle finished | `dev/logs/probe_20260905_141738.json` |
 | 15:16:36 | On dock, 100% battery (app-confirmed), app shows "resting" | `dev/logs/probe_20260905_151636.json` |
 | 16:01:40 | On dock, 100% battery, right after pressing the device's power button; app switched from "resting" to "charging finished" | `dev/logs/probe_20260905_160140.json` |
+| 16:08:24 | On dock; app setting "Trocknungsmodus" changed from "leiser Modus" to "Super-Speed-Modus" just before this probe | `dev/logs/probe_20260905_160824.json` |
