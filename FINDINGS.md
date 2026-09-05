@@ -75,6 +75,16 @@ self-clean/drying activity).
   treat `2:1` as informational only for the "charging done" case; gate any
   power-cutoff automation on `3:1` staying at 100 for a sustained window
   (e.g. 20–30 min) instead of on a single `2:1` reading.
+
+  Update 16:01:40: pressing the device's power button flipped `2:1` back
+  from `7` to `15`, and the app's own label switched from "resting" to
+  "charging finished" at the same time — some evidence `15` really is the
+  "done" state and the app's wording is just inconsistent between `15`
+  occurrences (calling it "resting" once, "charging finished" another
+  time). Still unconfirmed whether `2:1` flips to `7` on its own
+  (periodic maintenance pulse) without any button press — that's the next
+  test to run (leave the device undisturbed at 100% for 10-15 min and
+  re-probe).
 - What do `6:*`/`7:*` actually represent?
 - Exact units/meaning of `1:22`, `1:29`, `1:31`, `1:32`, `1:64/65/66/68/69`.
 - What `3:4` actually measures (see Ruled out / superseded above).
@@ -90,3 +100,4 @@ self-clean/drying activity).
 | 13:14:47 | On dock, drying running (after self-clean) | `dev/logs/probe_20260905_131447.json` |
 | 14:17:38 | On dock, idle, self-clean+dry cycle finished | `dev/logs/probe_20260905_141738.json` |
 | 15:16:36 | On dock, 100% battery (app-confirmed), app shows "resting" | `dev/logs/probe_20260905_151636.json` |
+| 16:01:40 | On dock, 100% battery, right after pressing the device's power button; app switched from "resting" to "charging finished" | `dev/logs/probe_20260905_160140.json` |
