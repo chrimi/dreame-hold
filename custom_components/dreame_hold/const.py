@@ -1,8 +1,8 @@
 """Constants for the Dreame Hold (handheld vacuum) integration.
 
 The siid/piid property map below is reverse-engineered empirically — see
-FINDINGS.md in the dreame-h14-probe companion tool for the snapshot-by-
-snapshot evidence. It is confirmed against a single device
+FINDINGS.md at the repo root for the snapshot-by-snapshot evidence. It is
+confirmed against a single device
 (model dreame.hold.w2306f, the H14 Pro) and may not hold for every
 dreame.hold.* / mova.hold.* model; treat unmapped status codes as unknown
 rather than erroring, since other models or firmware revisions will likely
@@ -63,8 +63,8 @@ otherwise frozen at the value reached when self-clean last ran."""
 
 # Batch of properties polled every coordinator refresh. Kept small and
 # specific (rather than re-sweeping the full siid/piid space) to avoid
-# hammering the cloud API on every poll — use dreame-h14-probe's
-# probe_properties.py separately to explore further properties.
+# hammering the cloud API on every poll — use dev/probe_properties.py
+# separately to explore further properties.
 POLLED_PROPERTIES: Final = [
     PROP_BATTERY_LEVEL,
     PROP_STATUS,

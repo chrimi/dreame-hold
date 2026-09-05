@@ -124,9 +124,8 @@ def _extract_hold_devices(devices_response: Any) -> list[dict[str, Any]]:
 
     The response shape mirrors dreame-vacuum's/dreame-mower's cloud API:
     a dict with a nested list of device dicts, each with at least
-    'did' and 'model'. Structure confirmed via dreame-h14-probe's
-    list_devices.py; adjust here if a differently-shaped account ever
-    turns up.
+    'did' and 'model'. Structure confirmed via dev/list_devices.py; adjust
+    here if a differently-shaped account ever turns up.
     """
     if not isinstance(devices_response, dict):
         return []

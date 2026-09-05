@@ -19,9 +19,9 @@ LICENSE for the full text and copyright holders.
 Everything else in this repository (the property map in `const.py`,
 `coordinator.py`, `entity.py`, `sensor.py`, `binary_sensor.py`,
 `config_flow.py`) is original, built from scratch by empirically probing a
-Dreame H14 Pro (model `dreame.hold.w2306f`) with the companion
-`dreame-h14-probe` tool — see that tool's `FINDINGS.md` for the evidence
-behind each property's meaning.
+Dreame H14 Pro (model `dreame.hold.w2306f`) with the tools in `dev/` — see
+`FINDINGS.md` at the repo root for the evidence behind each property's
+meaning.
 
 ## Changes made to the adapted files
 

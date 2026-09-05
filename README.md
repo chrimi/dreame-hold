@@ -21,11 +21,10 @@ model `dreame.hold.w2306f`). Entities:
   is running
 
 See `custom_components/dreame_hold/const.py` for the exact siid/piid
-property map and its confidence level, and the companion
-[`dreame-h14-probe`](../dreame-h14-probe) tool's `FINDINGS.md` for the
-evidence behind each one. Properties beyond what's listed there are
-unmapped — use `dreame-h14-probe` to explore further and extend
-`const.py`/`sensor.py` accordingly.
+property map and its confidence level, and [`FINDINGS.md`](FINDINGS.md) for
+the snapshot-by-snapshot evidence behind each one. Properties beyond what's
+listed there are unmapped — use the probing tools in [`dev/`](dev/) to
+explore further and extend `const.py`/`sensor.py` accordingly.
 
 ## Installation
 
@@ -58,6 +57,28 @@ email + the new password. (Confirmed workaround from
 
 If your account has multiple handheld devices, you'll be asked to pick the
 right one.
+
+## Exploring further properties (`dev/`)
+
+`dev/` holds the standalone (no Home Assistant needed) tools used to build
+the property map in `const.py`, following the same pattern
+[antondaubert/dreame-mower](https://github.com/antondaubert/dreame-mower)
+uses for its `dev/` folder:
+
+```bash
+cd dev
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+python3 list_devices.py                          # find your device's `did`
+python3 probe_properties.py --device-id <did>     # sweep siid/piid -> logs/probe_*.json
+python3 diff_snapshots.py logs/A.json logs/B.json # compare two snapshots
+```
+
+Change exactly one thing about the device's physical state between two
+probes (dock it, start self-clean, empty the water tank, ...) and diff —
+whatever changed is almost certainly tied to that state change. See
+`FINDINGS.md` for the full log of what's been tried and found so far.
 
 ## Known limitations / open items
 
