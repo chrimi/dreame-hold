@@ -138,6 +138,51 @@ without resolving this. Not pursued further for now — would need either a
 much wider blind sweep (e.g. `siid` 1-50) or a different search strategy
 to locate it.
 
+## Live write-path testing (via the built integration, not dev/ probing)
+
+First real test of `DreameCloudDevice.set_property` against the physical
+device, through the actual `switch`/`select` entities built into
+`custom_components/dreame_hold`. Confirms writing settings works in
+principle. Specific findings:
+
+- **`PROP_CLEANING_MODE` (`16:7`) cannot be set directly.** Selecting
+  "quiet" or "turbo" via the select entity did not switch the device's
+  actual mode. Likely explanation: it's a read-only reflection of
+  `PROP_SUCTION_POWER`/`PROP_WATER_LEVEL` rather than an independently
+  settable property — consistent with it being sticky/derived (see the
+  `16:7` entry above). The integration now exposes it as a read-only
+  sensor instead of a select. **Not yet root-caused** — would need
+  probing what "quiet"/"turbo" actually set `16:1`/`16:2` to (try writing
+  those two directly to see if that's what really switches the mode) or
+  checking whether mode-switching uses an `action` (siid/aiid) call
+  instead of `set_property`.
+- **`PROP_ELECTROLYZED_WATER_DISABLED` (`16:3`) only works while
+  `PROP_CUSTOM_MODE_ENABLED` (`16:6`) is on.** Confirmed on the real
+  device — modeled in the integration as an `available`/unavailable
+  dependency between the two switch entities.
+- **`PROP_WATER_LEVEL`'s (`16:2`) `level_2` value is not a real
+  Personalized-Mode choice.** The app's own water-level picker under
+  "Personalized Mode" only offers two options ("daily"/"wet") — `level_2`
+  only ever appeared as a side effect of selecting "Leiser Modus". Kept
+  decodable for reading, removed from the select entity's offered
+  options.
+- **App UI grouping** (useful context, not a functional issue): in the
+  real app, "Wash & Dry" groups Drying mode + Automatic self-clean +
+  Automatic roller brush drying + Scheduled roller brush drying (now
+  built as `time.<name>_scheduled_drying_time` +
+  `switch.<name>_scheduled_drying_*`, but with the write direction
+  unverified — see README's "Known limitations").
+  "Custom mode" groups quiet/turbo/personalized, with Water level and
+  Suction power as Personalized-Mode-only sub-settings, and Prepare
+  Electrolyzed Water gated on Custom mode being on (per above). Voice
+  language and Voice volume are presented together. The owner categorizes
+  Voice language, Voice volume, and Self propulsion force as general
+  "Device settings", and the rest as "cleaning settings" — this doesn't
+  map to anything in the current entity structure (HA has no built-in
+  "settings group" concept beyond entity_category CONFIG/DIAGNOSTIC,
+  which all of these already use) but is worth keeping in mind for
+  future dashboard/documentation organization.
+
 ## Open questions
 
 - **Does `2:1` flap between `7` and `15` at 100% battery, or was 15:16:36

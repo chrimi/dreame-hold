@@ -9,11 +9,9 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
-    CLEANING_MODE_NAMES,
     DOMAIN,
     DRYING_MODE_NAMES,
     LANGUAGE_NAMES,
-    PROP_CLEANING_MODE,
     PROP_DRYING_MODE,
     PROP_DRYING_MODE_MIRROR,
     PROP_PROPULSION_FORCE,
@@ -66,15 +64,18 @@ async def async_setup_entry(
                 ),
                 prop=PROP_WATER_LEVEL,
                 names=WATER_LEVEL_NAMES,
+                # "level_2" is only ever observed as an implied side effect of
+                # "Leiser Modus" (see const.py) - the app's own Personalized
+                # Mode water-level picker only offers "daily"/"wet". Kept
+                # decodable (for reading) but not offered as something to
+                # select, since picking it doesn't correspond to a real app
+                # action.
+                selectable_options=["daily", "wet"],
             ),
-            DreameHoldEnumSelect(
-                coordinator,
-                SelectEntityDescription(
-                    key="cleaning_mode", name="Cleaning mode", entity_category=EntityCategory.CONFIG
-                ),
-                prop=PROP_CLEANING_MODE,
-                names=CLEANING_MODE_NAMES,
-            ),
+            # NOTE: "Cleaning mode" (PROP_CLEANING_MODE) is NOT here - see
+            # sensor.py. Confirmed on a real device that selecting
+            # "quiet"/"turbo" does not actually change the mode, so it's
+            # exposed read-only until the real write mechanism is found.
             DreameHoldEnumSelect(
                 coordinator,
                 SelectEntityDescription(
@@ -99,6 +100,12 @@ class DreameHoldEnumSelect(DreameHoldEntity, SelectEntity):
     device reports that isn't in `names` (e.g. a code from a different
     model/firmware/region) surfaces as an unavailable current_option
     rather than raising.
+
+    `selectable_options` lets the offered dropdown differ from the full
+    set of decodable values - e.g. Water level decodes an internal
+    "level_2" the app itself never lets you pick directly (only "daily"/
+    "wet" are real choices in Personalized Mode); defaults to all of
+    `names` when not given.
     """
 
     def __init__(
@@ -108,6 +115,7 @@ class DreameHoldEnumSelect(DreameHoldEntity, SelectEntity):
         prop: tuple[int, int],
         names: dict[int, str],
         mirror_prop: tuple[int, int] | None = None,
+        selectable_options: list[str] | None = None,
     ) -> None:
         super().__init__(coordinator)
         self.entity_description = description
@@ -116,7 +124,7 @@ class DreameHoldEnumSelect(DreameHoldEntity, SelectEntity):
         self._names = names
         self._values = {v: k for k, v in names.items()}
         self._attr_unique_id = f"{coordinator.device.device_id}_{description.key}"
-        self._attr_options = list(names.values())
+        self._attr_options = list(names.values()) if selectable_options is None else selectable_options
 
     @property
     def current_option(self) -> str | None:
@@ -126,6 +134,8 @@ class DreameHoldEnumSelect(DreameHoldEntity, SelectEntity):
         return self._names.get(value)
 
     async def async_select_option(self, option: str) -> None:
+        if option not in self._attr_options:
+            raise HomeAssistantError(f"'{option}' is not selectable for {self.entity_description.key}")
         value = self._values.get(option)
         if value is None:
             raise HomeAssistantError(f"Unknown option '{option}' for {self.entity_description.key}")

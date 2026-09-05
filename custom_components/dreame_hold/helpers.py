@@ -67,3 +67,51 @@ def soiling_percentages(light: int, moderate: int, heavy: int) -> tuple[int, int
     moderate_pct = moderate * 100 // total
     heavy_pct = 100 - light_pct - moderate_pct
     return light_pct, moderate_pct, heavy_pct
+
+
+WEEKDAYS: tuple[str, ...] = (
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+)
+"""Order matches PROP_SCHEDULED_DRYING_WEEKDAYS' digit order (confirmed:
+"daily except Thursday" decoded to Mon,Tue,Wed,Thu,Fri,Sat,Sun =
+1,1,1,0,1,1,1)."""
+
+
+def decode_weekday_mask(value: int) -> dict[str, bool]:
+    """Decode PROP_SCHEDULED_DRYING_WEEKDAYS' 8-digit repeat mask.
+
+    Transmitted as a plain int, so a leading 0 (the normal case: a
+    repeating schedule) is dropped from the wire value — pad back to 8
+    digits before splitting. Digit 0 is a "one-time, no repeat" flag;
+    digits 1-7 are Monday..Sunday enabled. Confirmed against two real
+    values: `1110111` (padded `01110111`) for "daily except Thursday",
+    and `10000000` for "repeat off" (one_time=True, no days).
+
+    Returns a dict with keys "one_time" plus one per WEEKDAYS entry.
+    """
+    digits = str(value).zfill(8)
+    result: dict[str, bool] = {"one_time": digits[0] == "1"}
+    for i, day in enumerate(WEEKDAYS):
+        result[day] = digits[i + 1] == "1"
+    return result
+
+
+def encode_weekday_mask(days: dict[str, bool], one_time: bool = False) -> int:
+    """Inverse of decode_weekday_mask. `days` maps weekday name -> enabled;
+    a day missing from `days` is treated as disabled.
+
+    CAUTION: only the two real values above have been confirmed to
+    round-trip correctly. Writing this property back to the device with a
+    freshly-encoded value has not been tested (see FINDINGS.md's "Live
+    write-path testing" section) — the write direction for the scheduled-
+    drying feature is more speculative than the rest of this integration.
+    """
+    flag = "1" if one_time else "0"
+    day_digits = "".join("1" if days.get(day) else "0" for day in WEEKDAYS)
+    return int(flag + day_digits)

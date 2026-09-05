@@ -107,10 +107,11 @@ exactly). 0 when no schedule is set."""
 PROP_SCHEDULED_DRYING_WEEKDAYS: Final = (1, 13)
 """Scheduled drying repeat pattern as an 8-digit string (transmitted as an
 int, so a leading 0 is dropped in the raw value): digit 0 = "one-time, no
-repeat" flag, digits 1-7 = Mon..Sun enabled. Not currently exposed as an
-entity - encoding/writing this correctly (plus its parent-toggle
-interaction with PROP_AUTO_DRYING_DISABLED) needs more care than the
-simple enums below."""
+repeat" flag, digits 1-7 = Mon..Sun enabled. See helpers.py's
+encode_weekday_mask/decode_weekday_mask. The write direction is less
+confirmed than most other properties here - only the read/decode side
+has been verified against real values; see FINDINGS.md's "Live write-path
+testing" section."""
 
 PROP_SUCTION_POWER: Final = (16, 1)
 """'Saugleistung': see SUCTION_POWER_NAMES."""
@@ -158,6 +159,8 @@ POLLED_PROPERTIES: Final = [
     PROP_AUTO_DRYING_DISABLED,
     PROP_DRYING_MODE,
     PROP_DRYING_MODE_MIRROR,
+    PROP_SCHEDULED_DRYING_TIME,
+    PROP_SCHEDULED_DRYING_WEEKDAYS,
     PROP_SUCTION_POWER,
     PROP_WATER_LEVEL,
     PROP_CUSTOM_MODE_ENABLED,

@@ -7,8 +7,11 @@ covers for robot vacuums to this device class instead — the same relationship
 the [dreame-mower](https://github.com/antondaubert/dreame-mower) forks have
 to it for lawn mowers. See NOTICE.md for full provenance.
 
-**Status: early / v1.** Confirmed working against one device (H14 Pro,
-model `dreame.hold.w2306f`). Read-only status entities:
+**Status: late alpha.** Confirmed working against one device (H14 Pro,
+model `dreame.hold.w2306f`), including a live test of the write path — but
+several entities are still speculative or have known issues (see "Known
+limitations" below), there's no real-world usage history yet, and only one
+physical device has ever been tested against. Read-only status entities:
 
 - `sensor.<name>_battery` — battery level (%)
 - `binary_sensor.<name>_charging` — on while the device reports the raw
@@ -23,17 +26,29 @@ model `dreame.hold.w2306f`). Read-only status entities:
 - `sensor.<name>_soiling_light` / `_soiling_moderate` / `_soiling_heavy` —
   % of the last run spent on each soiling level (matches the app's own
   reported breakdown exactly)
+- `sensor.<name>_cleaning_mode` — quiet / turbo / personalized; read-only,
+  see "Known limitations" below
 
 Settings entities — these *write* to the device (via
 `DreameCloudDevice.set_property`), the same mechanism
 `Tasshack/dreame-vacuum` uses to be a full app replacement rather than a
-read-only integration:
+read-only integration. Confirmed working against a real device, with the
+exceptions noted under "Known limitations":
 
 - `switch.<name>_light`, `_auto_self_clean`, `_auto_drying`,
-  `_custom_cleaning_mode`, `_prepare_electrolyzed_water`
+  `_custom_cleaning_mode`, `_prepare_electrolyzed_water` (only usable
+  while `_custom_cleaning_mode` is on)
 - `select.<name>_drying_mode`, `_voice_language`, `_suction_power`,
-  `_water_level`, `_cleaning_mode`, `_propulsion_force`
+  `_water_level`, `_propulsion_force` — `_water_level` and
+  `_suction_power` are only meaningful in "Personalized" cleaning mode
 - `number.<name>_voice_volume`
+- `time.<name>_scheduled_drying_time` and `switch.<name>_scheduled_drying_monday`
+  through `_sunday` — the scheduled roller-brush-drying start time and
+  weekday repeat pattern. **Less confirmed than everything else**: only
+  reading/decoding real values has been verified, writing a freshly-set
+  time or weekday combination back to the device has not been tested.
+  Only usable while `_auto_drying` is on (turning that off resets the
+  whole schedule to 0 on the device, confirmed).
 
 See `custom_components/dreame_hold/const.py` for the exact siid/piid
 property map and its confidence level, and [`FINDINGS.md`](FINDINGS.md) for
@@ -149,17 +164,27 @@ that the untested surface stays small. Runs on push/PR via
 
 ## Known limitations / open items
 
-- **The write path (switch/select/number entities) has not been tested
-  against a real device.** Every property in this integration was
-  discovered and verified by *reading* (`get_properties` via
-  `dev/probe_properties.py`) — the app's own UI made every settings
-  change during probing, never `DreameCloudDevice.set_property`. The read
-  side (sensors, binary_sensor) is confirmed working; whether `set_property`
-  calls with these siid/piid/value combinations actually work has not been
-  checked. Unit tests cover `set_property` being *called* correctly (see
-  "Unit tests" above) but can't confirm the device actually accepts these
-  particular values, since they mock the HTTP layer rather than hitting
-  a real device.
+- **The write path is now confirmed working against a real device in
+  principle** (switch/select/number entities do change device settings),
+  with two confirmed exceptions:
+  - `select.<name>_cleaning_mode` doesn't actually switch the device
+    between "quiet"/"turbo" when written — it's exposed as a **read-only
+    sensor** instead (`sensor.<name>_cleaning_mode`) until the real write
+    mechanism is found. Likely a derived reflection of suction
+    power + water level rather than independently settable.
+  - `switch.<name>_prepare_electrolyzed_water` only works while
+    `switch.<name>_custom_cleaning_mode` is on — modeled as an
+    `available`/unavailable dependency between the two entities.
+  - `select.<name>_water_level`'s internal `level_2` value (only ever
+    seen as a side effect of "Leiser Modus") is decodable for reading but
+    not offered as something to select — the app's own Personalized-Mode
+    picker only offers "daily"/"wet".
+- **Scheduled roller brush drying's write direction is unverified.**
+  `time.<name>_scheduled_drying_time` and the `switch.<name>_scheduled_drying_*`
+  weekday entities encode/decode against the exact two real values seen
+  during probing (see `helpers.py`'s `encode_weekday_mask`/
+  `decode_weekday_mask` and their tests), but nobody has confirmed the
+  device actually accepts a freshly-written time or weekday mask yet.
 - Only one physical device (H14 Pro) has been used to build the property
   map — other `dreame.hold.*`/`mova.hold.*` models may expose different
   siid/piid numbers or additional status codes. The status sensor falls

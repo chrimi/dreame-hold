@@ -13,9 +13,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
+    CLEANING_MODE_NAMES,
     DOMAIN,
     PROP_ACTIVITY_PROGRESS,
     PROP_BATTERY_LEVEL,
+    PROP_CLEANING_MODE,
     PROP_LAST_RUN_DURATION,
     PROP_SOILING_HEAVY,
     PROP_SOILING_LIGHT,
@@ -82,6 +84,14 @@ SOILING_HEAVY_DESCRIPTION = SensorEntityDescription(
     entity_category=EntityCategory.DIAGNOSTIC,
 )
 
+CLEANING_MODE_DESCRIPTION = SensorEntityDescription(
+    key="cleaning_mode",
+    name="Cleaning mode",
+    device_class=SensorDeviceClass.ENUM,
+    options=[*CLEANING_MODE_NAMES.values(), "unknown"],
+    entity_category=EntityCategory.DIAGNOSTIC,
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
@@ -96,6 +106,7 @@ async def async_setup_entry(
             DreameHoldSoilingSensor(coordinator, SOILING_LIGHT_DESCRIPTION, PROP_SOILING_LIGHT),
             DreameHoldSoilingSensor(coordinator, SOILING_MODERATE_DESCRIPTION, PROP_SOILING_MODERATE),
             DreameHoldSoilingSensor(coordinator, SOILING_HEAVY_DESCRIPTION, PROP_SOILING_HEAVY),
+            DreameHoldCleaningModeSensor(coordinator),
         ]
     )
 
@@ -217,3 +228,27 @@ class DreameHoldSoilingSensor(DreameHoldEntity, SensorEntity):
         if self._prop == PROP_SOILING_MODERATE:
             return moderate_pct
         return heavy_pct
+
+
+class DreameHoldCleaningModeSensor(DreameHoldEntity, SensorEntity):
+    """Read-only: which cleaning mode is currently active.
+
+    Not a `select` — confirmed on a real device that writing PROP_CLEANING_MODE
+    directly (to switch to "quiet"/"turbo") doesn't actually change the
+    mode. Likely a derived reflection of PROP_SUCTION_POWER +
+    PROP_WATER_LEVEL rather than something settable on its own; exposed
+    read-only until the real write mechanism is found (see FINDINGS.md).
+    """
+
+    entity_description = CLEANING_MODE_DESCRIPTION
+
+    def __init__(self, coordinator: DreameHoldDataUpdateCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.device.device_id}_{self.entity_description.key}"
+
+    @property
+    def native_value(self) -> str:
+        value = self._property(PROP_CLEANING_MODE)
+        if value is None:
+            return "unknown"
+        return CLEANING_MODE_NAMES.get(value, "unknown")
