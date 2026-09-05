@@ -24,6 +24,17 @@ Dreame H14 Pro (model `dreame.hold.w2306f`) with the tools in `dev/` — see
 `FINDINGS.md` at the repo root for the evidence behind each property's
 meaning.
 
+`custom_components/dreame_hold/brand/` (`icon.png`, `icon@2x.png`,
+`logo.png`, `logo@2x.png`, `dark_logo.png`, `dark_logo@2x.png`) is
+Dreame's official trademark/logo, byte-identical to the assets
+`Tasshack/dreame-vacuum` and `antondaubert/dreame-mower` use for the same
+purpose (identifying the device manufacturer, not this project). Sourced
+from [home-assistant/brands](https://github.com/home-assistant/brands)'s
+`custom_integrations/dreame_vacuum/` entry. Per Home Assistant's Brands
+Proxy API (2026.3+), custom integrations ship these locally instead of
+submitting a PR to that repository — see
+[the announcement](https://developers.home-assistant.io/blog/2026/02/24/brands-proxy-api).
+
 ## Changes made to the adapted files
 
 Classes renamed `DreameMowerCloud*` → `DreameCloud*` (no functional
