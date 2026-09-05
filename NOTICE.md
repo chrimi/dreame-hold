@@ -1,8 +1,9 @@
 # Provenance
 
 `custom_components/dreame_hold/dreame_cloud/` (`cloud_base.py`,
-`cloud_device.py`) is adapted from two MIT-licensed upstream projects — see
-LICENSE for the full text and copyright holders.
+`cloud_device.py`) is adapted from two MIT-licensed upstream projects, each
+with its own copyright as noted below. LICENSE (MIT) governs this
+repository's own original code.
 
 - **Original protocol implementation**: [Tasshack/dreame-vacuum](https://github.com/Tasshack/dreame-vacuum),
   Copyright (c) 2022 Tasshack. That project is scoped to robot vacuums;
