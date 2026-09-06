@@ -89,7 +89,7 @@ async def async_setup_entry(
                 depends_on=(PROP_CUSTOM_MODE_ENABLED, 1),
             ),
             DreameHoldScheduledDryingEnabledSwitch(coordinator),
-            *[DreameHoldWeekdaySwitch(coordinator, day) for day in WEEKDAYS],
+            *[DreameHoldWeekdaySwitch(coordinator, day, index) for index, day in enumerate(WEEKDAYS, start=2)],
         ]
     )
 
@@ -176,11 +176,19 @@ class DreameHoldScheduledDryingEnabledSwitch(DreameHoldEntity, SwitchEntity):
     (if such a thing existed) merely paused. Falls back to 15:00 with a
     one-time (non-repeating) schedule if nothing has ever been observed
     yet in this Home Assistant session.
+
+    Named with a "0" sort prefix - see the module-level note above
+    DreameHoldWeekdaySwitch for why: Home Assistant's device page has no
+    sort mechanism beyond the display name, confirmed via a plain
+    alphabetical name causing this and "Start time" to interleave into
+    the middle of the weekday list. Digits are the only thing that
+    actually works there, per explicit owner request after that was
+    reported live.
     """
 
     entity_description = SwitchEntityDescription(
         key="scheduled_drying_enabled",
-        name="Scheduled drying: Enabled",
+        name="Scheduled drying: 0 Enabled",
         entity_category=EntityCategory.CONFIG,
     )
     _DEFAULT_SCHEDULE = (54000, 10000000)  # 15:00:00, one-time (no repeat)
@@ -222,10 +230,7 @@ class DreameHoldWeekdaySwitch(DreameHoldEntity, SwitchEntity):
     """One weekday bit of PROP_SCHEDULED_DRYING_WEEKDAYS.
 
     Write path confirmed working live (see FINDINGS.md's "Live write-path
-    testing" section). Only available while "Automatic roller brush
-    drying" is on (turning that off resets the whole schedule to 0 on the
-    device, confirmed) - modeled via `depends_on` like the
-    electrolyzed-water switch above.
+    testing" section).
 
     All 7 of these share one encoded property, so toggling one requires a
     read-modify-write of the whole mask - done via the coordinator's
@@ -250,20 +255,24 @@ class DreameHoldWeekdaySwitch(DreameHoldEntity, SwitchEntity):
     even represent. Confirmed real bug reported live: selecting a day
     while disabled left the two entities visibly out of sync.
 
-    Named plainly ("Scheduled drying: Monday", etc., no numeric sort
-    prefix) per explicit owner preference - Home Assistant's device page
-    then lists them alphabetically (Friday, Monday, Saturday, ...) rather
-    than Monday..Sunday order. A previous version of this integration
-    used a "1"-"7" prefix to force chronological order, but the owner
-    found bare digits in the entity name meaningless without context and
-    preferred natural names over correct sorting.
+    Named with a "2"-"8" sort prefix (following "0 Enabled" and "1 Start
+    time" above) so Home Assistant's device page - which has no sort
+    mechanism beyond the display name, confirmed by checking - lists
+    these in Monday..Sunday order instead of alphabetically. A plain-name
+    version of this ("Scheduled drying: Monday", no prefix) shipped
+    briefly per an earlier owner preference, but was reverted once it
+    visibly interleaved "Start time" into the middle of the weekday list
+    and left the days themselves alphabetically scattered on the actual
+    device page (as opposed to a custom dashboard, which can be ordered
+    manually but wasn't what was being asked about) - digits turned out
+    to be the only mechanism that actually works there.
     """
 
-    def __init__(self, coordinator: DreameHoldDataUpdateCoordinator, day: str) -> None:
+    def __init__(self, coordinator: DreameHoldDataUpdateCoordinator, day: str, index: int) -> None:
         super().__init__(coordinator)
         self.entity_description = SwitchEntityDescription(
             key=f"scheduled_drying_{day}",
-            name=f"Scheduled drying: {day.capitalize()}",
+            name=f"Scheduled drying: {index} {day.capitalize()}",
             entity_category=EntityCategory.CONFIG,
         )
         self._day = day

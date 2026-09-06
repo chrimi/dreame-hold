@@ -52,7 +52,7 @@ in the UI instead of scattering alphabetically across the device's
 entity list. `_suction_power`, `_water_level`, and
 `_prepare_electrolyzed_water` all report `unavailable` unless
 `_custom_cleaning_mode` is on (confirmed on a real device).
-- `time.<name>_scheduled_drying_time`, `switch.<name>_scheduled_drying_enabled`,
+- `time.<name>_scheduled_drying_time`, `switch.<name>_scheduled_drying_0_enabled`,
   and `switch.<name>_scheduled_drying_monday` through `_sunday` — the
   scheduled roller-brush-drying feature: start time, a master on/off, and
   the weekday repeat pattern. Reading, writing, and the weekday bit
@@ -69,18 +69,25 @@ entity list. `_suction_power`, `_water_level`, and
   1:9 and the schedule are independent"). There's no separate
   enable/disable property for the schedule itself — the device's own
   "off" state is simply the start time and weekday mask both being 0 —
-  so `_scheduled_drying_enabled` synthesizes a proper switch around
+  so `_scheduled_drying_0_enabled` synthesizes a proper switch around
   that and remembers your last configured time/weekdays so turning it
   back on doesn't leave you reconfiguring from scratch (in-memory only;
   reset if Home Assistant restarts while the schedule is off). The
   weekday switches and the time entity are only available while
-  `_scheduled_drying_enabled` is on, so a day/time can't be set while the
-  schedule itself is disabled (a reported bug: the two used to be able to
-  drift out of sync). Named plainly (no numeric sort prefix, per owner
-  preference), so they list alphabetically (Friday, Monday, Saturday, ...)
-  rather than Monday..Sunday order — an earlier version prefixed a "1"-"7"
-  index to force chronological order, but bare digits in the name were
-  judged more confusing than useful.
+  `_scheduled_drying_0_enabled` is on, so a day/time can't be set while
+  the schedule itself is disabled (a reported bug: the two used to be
+  able to drift out of sync). Named with a "0"-"8" sort prefix
+  ("0 Enabled", "1 Start time", "2 Monday" ... "8 Sunday") so Home
+  Assistant's device page - which has no sort mechanism beyond the
+  display name - lists them in that logical order instead of
+  alphabetically. A plain-name version (no digits) shipped briefly per
+  an earlier owner preference, but was reverted once it visibly
+  interleaved "Start time" into the middle of the weekday list and left
+  the days themselves scattered (Friday, Monday, Saturday, ...) on the
+  actual device page - digits turned out to be the only mechanism that
+  actually works there (a separate custom dashboard can be ordered
+  manually regardless of entity names, but that's not the device page
+  itself, which was the actual ask).
 
 See `custom_components/dreame_hold/const.py` for the exact siid/piid
 property map and its confidence level, and [`FINDINGS.md`](FINDINGS.md) for

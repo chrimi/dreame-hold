@@ -384,8 +384,32 @@ this purpose — never committed, deleted after use):
      start time" (no colon-prefix) while every other entity in this
      group uses "Scheduled drying: X", so it fell outside that
      alphabetical cluster entirely. Renamed to "Scheduled drying: Start
-     time" for consistency, which also fixes the ordering as a side
-     effect ("Enabled" < "Start time" alphabetically).
+     time" for consistency - which fixed *that* specific misplacement,
+     but exposed the deeper issue below.
+- **Reverted the plain-name experiment above: confirmed via a live
+  before/after test that Home Assistant's device page has no sort
+  mechanism beyond the display name, full stop - the numeric prefix was
+  necessary, not optional.** After the rename in point 3, the owner
+  clarified the actual ask was about the auto-generated device
+  configuration page specifically (Settings → Devices & Services →
+  device), not a dashboard - and reported the real outcome there: with
+  all-alphabetical names, "Scheduled drying: Start time" sorted
+  alphabetically *between* Saturday and Sunday (since "Start" < "Sunday"
+  but "Saturday" < "Start"), landing in the middle of the weekday list,
+  and the 7 days themselves were still scattered (Friday, Monday,
+  Saturday, ...) rather than Monday..Sunday. A web search confirmed this
+  is a real, current platform limitation as of HA 2026.9 - the device
+  page sorts purely alphabetically with no drag-and-drop or other
+  override, and the only documented community workaround (delete +
+  re-add entities in the desired order) is fragile and not something an
+  integration can drive reliably. A separate custom Lovelace dashboard
+  *can* be freely ordered regardless of entity names, and one was built
+  as a first attempt - but that wasn't what was being asked about, and
+  doesn't help the default device page other users of this integration
+  will see. Reverted to a "0"-"8" numeric prefix
+  ("0 Enabled", "1 Start time", "2 Monday" ... "8 Sunday") as the only
+  mechanism that actually works on that page, per explicit owner
+  decision after seeing the alphabetical-only result fail in practice.
 - **Cleaning mode sensor showed "personalized" while Custom mode was
   off - confirmed as a real display bug, not a device/read error.**
   Live values at the time: `16:6` (Custom mode enabled) = `0`, `16:7`
