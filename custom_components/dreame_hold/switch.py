@@ -89,7 +89,7 @@ async def async_setup_entry(
                 depends_on=(PROP_CUSTOM_MODE_ENABLED, 1),
             ),
             DreameHoldScheduledDryingEnabledSwitch(coordinator),
-            *[DreameHoldWeekdaySwitch(coordinator, day, index) for index, day in enumerate(WEEKDAYS)],
+            *[DreameHoldWeekdaySwitch(coordinator, day) for day in WEEKDAYS],
         ]
     )
 
@@ -180,7 +180,7 @@ class DreameHoldScheduledDryingEnabledSwitch(DreameHoldEntity, SwitchEntity):
 
     entity_description = SwitchEntityDescription(
         key="scheduled_drying_enabled",
-        name="Scheduled drying: 0 Enabled",
+        name="Scheduled drying: Enabled",
         entity_category=EntityCategory.CONFIG,
     )
     _DEFAULT_SCHEDULE = (54000, 10000000)  # 15:00:00, one-time (no repeat)
@@ -242,19 +242,38 @@ class DreameHoldWeekdaySwitch(DreameHoldEntity, SwitchEntity):
     switch doesn't affect this property either way (see that constant's
     docstring), so availability isn't gated on it.
 
-    Names are prefixed with a 1-7 index so Home Assistant's alphabetical
-    entity sort still lands in Monday..Sunday order.
+    Available only while "Scheduled drying: Enabled" is on (i.e.
+    PROP_SCHEDULED_DRYING_TIME != 0) - without this, a day could be
+    toggled on while the schedule itself is off (both properties at 0),
+    which the "Enabled" switch's is_on wouldn't reflect (it only looks at
+    the time) and which doesn't correspond to any state the real app can
+    even represent. Confirmed real bug reported live: selecting a day
+    while disabled left the two entities visibly out of sync.
+
+    Named plainly ("Scheduled drying: Monday", etc., no numeric sort
+    prefix) per explicit owner preference - Home Assistant's device page
+    then lists them alphabetically (Friday, Monday, Saturday, ...) rather
+    than Monday..Sunday order. A previous version of this integration
+    used a "1"-"7" prefix to force chronological order, but the owner
+    found bare digits in the entity name meaningless without context and
+    preferred natural names over correct sorting.
     """
 
-    def __init__(self, coordinator: DreameHoldDataUpdateCoordinator, day: str, index: int) -> None:
+    def __init__(self, coordinator: DreameHoldDataUpdateCoordinator, day: str) -> None:
         super().__init__(coordinator)
         self.entity_description = SwitchEntityDescription(
             key=f"scheduled_drying_{day}",
-            name=f"Scheduled drying: {index + 1} {day.capitalize()}",
+            name=f"Scheduled drying: {day.capitalize()}",
             entity_category=EntityCategory.CONFIG,
         )
         self._day = day
         self._attr_unique_id = f"{coordinator.device.device_id}_{self.entity_description.key}"
+
+    @property
+    def available(self) -> bool:
+        if not super().available:
+            return False
+        return bool(self._property(PROP_SCHEDULED_DRYING_TIME))
 
     @property
     def is_on(self) -> bool | None:

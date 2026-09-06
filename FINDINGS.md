@@ -344,6 +344,47 @@ this purpose — never committed, deleted after use):
   if nothing has been observed yet this session. Verified live: configure
   a schedule, turn "off" (both -> 0, confirmed), turn back "on" -
   original schedule (15:00, Saturday) exactly restored.
+- **Follow-up UI fixes reported immediately after the switch above shipped:**
+  1. **The new "Enabled" switch didn't couple with the time/weekday
+     entities**, so a weekday could be toggled on while the schedule was
+     still off (both properties at 0) - a state the real app can't even
+     represent, and one "Enabled" wouldn't reflect (its `is_on` only
+     checks the time). Fixed by gating the weekday switches' and time
+     entity's `available` on the same condition "Enabled" uses
+     (`PROP_SCHEDULED_DRYING_TIME != 0`) - matches the `depends_on`
+     pattern already used for Custom mode's sub-settings. Turn "Enabled"
+     on first (seeds a real time) to make the day/time entities
+     adjustable.
+  2. **The `1`-`7` numeric name prefix (added earlier to force
+     Monday..Sunday sort order) was flagged as confusing** - bare digits
+     in an entity's display name carry no meaning to a user browsing the
+     device page. Removed per explicit owner preference; entities are
+     now named plainly ("Scheduled drying: Monday", etc., including
+     "Enabled" without its former "0" prefix) and list alphabetically
+     instead. `unique_id`/`entity_id` for the 7 weekday switches were
+     never tied to the numbered name (already confirmed safe to rename
+     in an earlier fix) so this was a display-only change for them: the
+     "Enabled" switch was brand new (only existed since the previous
+     restart) and *did* get its entity_id from the numbered name at
+     first creation, so its stale registry entry was removed via
+     `ha_remove_entity` so the next restart generates the correct
+     `scheduled_drying_enabled` id from scratch instead of keeping a
+     `..._0_enabled` id forever.
+- **Cleaning mode sensor showed "personalized" while Custom mode was
+  off - confirmed as a real display bug, not a device/read error.**
+  Live values at the time: `16:6` (Custom mode enabled) = `0`, `16:7`
+  (cleaning mode) = `4` ("personalized") simultaneously. The device
+  owner clarified the app's own behavior: the quiet/turbo/personalized
+  picker only appears once you go to turn Custom mode on in the app;
+  while it's off, `16:7`'s stored value is just the last selection
+  remembered for next time, not anything currently in effect. Fixed by
+  gating `DreameHoldCleaningModeSensor`'s `available` on
+  `PROP_CUSTOM_MODE_ENABLED == 1`, matching the same treatment already
+  used for Suction power/Water level. Also found and removed (via
+  `ha_remove_entity`) a stale `select.<name>_cleaning_mode` orphaned in
+  the entity registry from before this sensor's move out of select.py in
+  an earlier fix - Home Assistant doesn't auto-purge an entity just
+  because the integration stops creating it.
 
 ## Open questions
 

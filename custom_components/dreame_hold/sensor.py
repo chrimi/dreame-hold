@@ -18,6 +18,7 @@ from .const import (
     PROP_ACTIVITY_PROGRESS,
     PROP_BATTERY_LEVEL,
     PROP_CLEANING_MODE,
+    PROP_CUSTOM_MODE_ENABLED,
     PROP_LAST_RUN_DURATION,
     PROP_SOILING_HEAVY,
     PROP_SOILING_LIGHT,
@@ -238,6 +239,17 @@ class DreameHoldCleaningModeSensor(DreameHoldEntity, SensorEntity):
     mode. Likely a derived reflection of PROP_SUCTION_POWER +
     PROP_WATER_LEVEL rather than something settable on its own; exposed
     read-only until the real write mechanism is found (see FINDINGS.md).
+
+    Only meaningful while "Custom mode: Enabled" (PROP_CUSTOM_MODE_ENABLED)
+    is on - confirmed with the device owner: the app itself only shows a
+    cleaning-mode picker (quiet/turbo/personalized) once you go to turn
+    Custom mode on, defaulting to whatever was last selected there. While
+    Custom mode is off, PROP_CLEANING_MODE's raw value is just that
+    remembered last selection, not anything currently in effect -
+    reporting it unconditionally (as an earlier version of this entity
+    did) falsely implied a mode was "active" when it wasn't. Marked
+    unavailable instead, matching the same `depends_on` treatment already
+    used for Suction power/Water level in select.py.
     """
 
     entity_description = CLEANING_MODE_DESCRIPTION
@@ -245,6 +257,12 @@ class DreameHoldCleaningModeSensor(DreameHoldEntity, SensorEntity):
     def __init__(self, coordinator: DreameHoldDataUpdateCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.device.device_id}_{self.entity_description.key}"
+
+    @property
+    def available(self) -> bool:
+        if not super().available:
+            return False
+        return self._property(PROP_CUSTOM_MODE_ENABLED) == 1
 
     @property
     def native_value(self) -> str:

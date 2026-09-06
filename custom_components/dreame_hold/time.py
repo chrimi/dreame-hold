@@ -46,6 +46,13 @@ class DreameHoldScheduledDryingTime(DreameHoldEntity, TimeEntity):
     here as no time set) is itself the device's own "no schedule"
     state - see "Scheduled drying: Enabled" in switch.py for a friendlier
     on/off toggle around that.
+
+    Available only while that "Enabled" switch is on (PROP_SCHEDULED_DRYING_TIME
+    != 0) - matches the same gating on the weekday switches in switch.py,
+    fixing a reported bug where the time/weekday entities could be
+    fiddled with while the schedule itself was off, visibly out of sync
+    with "Enabled". Turn "Enabled" on first (it seeds a real time via
+    the last-known or default schedule) to make this adjustable.
     """
 
     entity_description = SCHEDULED_DRYING_TIME_DESCRIPTION
@@ -53,6 +60,12 @@ class DreameHoldScheduledDryingTime(DreameHoldEntity, TimeEntity):
     def __init__(self, coordinator: DreameHoldDataUpdateCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.device.device_id}_{self.entity_description.key}"
+
+    @property
+    def available(self) -> bool:
+        if not super().available:
+            return False
+        return bool(self._property(PROP_SCHEDULED_DRYING_TIME))
 
     @property
     def native_value(self) -> dt_time | None:
