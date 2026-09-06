@@ -10,5 +10,5 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(REPO_ROOT / "custom_components" / "dreame_hold"))
-sys.path.insert(0, str(REPO_ROOT / "dev"))
+sys.path.append(str(REPO_ROOT / "custom_components" / "dreame_hold"))
+sys.path.append(str(REPO_ROOT / "dev"))

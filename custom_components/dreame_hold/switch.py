@@ -82,7 +82,7 @@ async def async_setup_entry(
                 # toggled while "Custom cleaning mode" is on.
                 depends_on=(PROP_CUSTOM_MODE_ENABLED, 1),
             ),
-            *[DreameHoldWeekdaySwitch(coordinator, day) for day in WEEKDAYS],
+            *[DreameHoldWeekdaySwitch(coordinator, day, index) for index, day in enumerate(WEEKDAYS)],
         ]
     )
 
@@ -152,19 +152,29 @@ class DreameHoldWeekdaySwitch(DreameHoldEntity, SwitchEntity):
     """One weekday bit of PROP_SCHEDULED_DRYING_WEEKDAYS.
 
     CAUTION: less confirmed than other entities in this integration - only
-    reading/decoding real values has been verified, not writing a
-    freshly re-encoded mask back to the device. See FINDINGS.md's "Live
-    write-path testing" section. Only available while "Automatic roller
-    brush drying" is on (turning that off resets the whole schedule to 0
-    on the device, confirmed) - modeled via `depends_on` like the
-    electrolyzed-water switch above.
+    reading/decoding real values has been verified. See FINDINGS.md's
+    "Live write-path testing" section. Only available while "Automatic
+    roller brush drying" is on (turning that off resets the whole
+    schedule to 0 on the device, confirmed) - modeled via `depends_on`
+    like the electrolyzed-water switch above.
+
+    All 7 of these share one encoded property, so toggling one requires a
+    read-modify-write of the whole mask. `_set` deliberately fetches a
+    *fresh* value from the device right before writing (not the
+    coordinator's polled/cached value, which can be up to
+    DEFAULT_SCAN_INTERVAL seconds stale) - toggling two of these switches
+    in quick succession against a stale cached base would otherwise let
+    the second write silently undo the first.
+
+    Names are prefixed with a 1-7 index so Home Assistant's alphabetical
+    entity sort still lands in Monday..Sunday order.
     """
 
-    def __init__(self, coordinator: DreameHoldDataUpdateCoordinator, day: str) -> None:
+    def __init__(self, coordinator: DreameHoldDataUpdateCoordinator, day: str, index: int) -> None:
         super().__init__(coordinator)
         self.entity_description = SwitchEntityDescription(
             key=f"scheduled_drying_{day}",
-            name=f"Scheduled drying: {day.capitalize()}",
+            name=f"Scheduled drying: {index + 1} {day.capitalize()}",
             entity_category=EntityCategory.CONFIG,
         )
         self._day = day
@@ -184,13 +194,25 @@ class DreameHoldWeekdaySwitch(DreameHoldEntity, SwitchEntity):
         return decode_weekday_mask(value)[self._day]
 
     async def _set(self, enabled: bool) -> None:
-        current = self._property(PROP_SCHEDULED_DRYING_WEEKDAYS) or 0
+        siid, piid = PROP_SCHEDULED_DRYING_WEEKDAYS
+        try:
+            fresh = await self.hass.async_add_executor_job(
+                self.coordinator.device.get_properties, [{"siid": siid, "piid": piid}]
+            )
+        except Exception as ex:
+            raise HomeAssistantError(f"Failed to read current schedule before setting {self._day}: {ex}") from ex
+
+        current = 0
+        if fresh:
+            match = next((r for r in fresh if r.get("siid") == siid and r.get("piid") == piid), None)
+            if match and match.get("code") == 0:
+                current = match.get("value") or 0
+
         decoded = decode_weekday_mask(current)
         decoded[self._day] = enabled
         one_time = decoded.pop("one_time")
         new_value = encode_weekday_mask(decoded, one_time=one_time)
 
-        siid, piid = PROP_SCHEDULED_DRYING_WEEKDAYS
         try:
             await self.hass.async_add_executor_job(self.coordinator.device.set_property, siid, piid, new_value)
         except Exception as ex:

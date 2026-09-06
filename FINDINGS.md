@@ -183,6 +183,57 @@ principle. Specific findings:
   which all of these already use) but is worth keeping in mind for
   future dashboard/documentation organization.
 
+### Scheduled-drying entities: bug found and fixed, root cause confirmed
+
+After building `time.<name>_scheduled_drying_time` and the weekday
+switches, the owner reported three issues while testing live: the start
+time reverted to 00:00 in the app, HA showed no active schedule while the
+app still showed one configured, and the per-day entries appeared out of
+order in the UI. Diagnosed directly against the real device (with
+temporary, throwaway scripts using credentials the owner provided for
+this purpose — never committed, deleted after use):
+
+- **Confirmed the raw write mechanism itself works correctly**:
+  `set_property(1, 12, 54000)` took effect immediately and was still
+  `54000` after a 5-second delay on read-back. This rules out a bug in
+  `DreameCloudDevice.set_property` or the time-to-seconds conversion.
+- **Found and fixed a real race condition**: `DreameHoldWeekdaySwitch._set()`
+  was computing its read-modify-write base value from the *coordinator's
+  polled/cached* property (up to `DEFAULT_SCAN_INTERVAL` seconds stale).
+  Toggling two weekday switches back-to-back, faster than a poll cycle,
+  let the second write silently overwrite the first with a stale base
+  mask. Fixed to fetch a *fresh* value via `get_properties` immediately
+  before each write. **Verified live**: toggling Monday then immediately
+  Tuesday (no delay) now correctly leaves both set
+  (`1:13` read back as `1100000` — decodes to Monday+Tuesday, matching
+  `helpers.decode_weekday_mask`) — before the fix this would very likely
+  have left only Tuesday set.
+- **The device's actual state at the time of the report was `1:12=0,
+  1:13=0`** (fully cleared) — confirmed by direct read. Since raw writes
+  work and persist, the most likely explanation for "time reverted to
+  00:00" and "HA shows nothing, app still shows a schedule" is the
+  already-documented `PROP_AUTO_DRYING_DISABLED` side effect (turning
+  "Automatic roller brush drying" off resets both properties to 0) having
+  been triggered at some point during testing, combined with the app not
+  necessarily refreshing its own display immediately after a change made
+  by a different client (this integration) rather than itself — the
+  latter is a plausible but unconfirmed app-side behavior, not something
+  this integration can control either way.
+- Also fixed while investigating: weekday switch entity names now get a
+  `1`-`7` numeric prefix so Home Assistant's alphabetical entity sort
+  still lands in Monday..Sunday order (previously e.g. "Friday" sorted
+  before "Monday").
+- **Unrelated but discovered in the process**: `sys.path.insert(0, ...)`
+  in the `dev/` scripts and `tests/conftest.py` made
+  `custom_components/dreame_hold/select.py` and `.../time.py` shadow
+  Python's own stdlib `select`/`time` modules, since those files now
+  exist (added for the settings entities) and our directory was placed
+  *first* on `sys.path`. Any script importing something that transitively
+  needs stdlib `select` (e.g. `ssl` → `socket` → `selectors` → `select`)
+  after that point would crash with a confusing traceback. Fixed by
+  switching to `sys.path.append(...)` everywhere, so the standard library
+  is always searched first.
+
 ## Open questions
 
 - **Does `2:1` flap between `7` and `15` at 100% battery, or was 15:16:36

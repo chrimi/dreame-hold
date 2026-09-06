@@ -19,7 +19,7 @@ ROOT_DIR = Path(__file__).parent.parent
 # Import dreame_cloud directly (not via `custom_components.dreame_hold...`) so
 # this script doesn't trigger dreame_hold/__init__.py, which imports
 # `homeassistant` — not something a standalone probe script should require.
-sys.path.insert(0, str(ROOT_DIR / "custom_components" / "dreame_hold"))
+sys.path.append(str(ROOT_DIR / "custom_components" / "dreame_hold"))
 
 from dreame_cloud.cloud_device import DreameCloudDevice
 

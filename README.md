@@ -179,12 +179,17 @@ that the untested surface stays small. Runs on push/PR via
     seen as a side effect of "Leiser Modus") is decodable for reading but
     not offered as something to select — the app's own Personalized-Mode
     picker only offers "daily"/"wet".
-- **Scheduled roller brush drying's write direction is unverified.**
-  `time.<name>_scheduled_drying_time` and the `switch.<name>_scheduled_drying_*`
-  weekday entities encode/decode against the exact two real values seen
-  during probing (see `helpers.py`'s `encode_weekday_mask`/
-  `decode_weekday_mask` and their tests), but nobody has confirmed the
-  device actually accepts a freshly-written time or weekday mask yet.
+- **Scheduled roller brush drying**: the raw write mechanism is now
+  confirmed working (writing the start time directly persisted correctly
+  in a live test, including a 5-second read-back), and a real race
+  condition in the weekday switches (stale coordinator-cached
+  read-modify-write, letting rapid consecutive day toggles clobber each
+  other) has been found and fixed — see FINDINGS.md's "Scheduled-drying
+  entities" section for the full diagnosis. Only usable while
+  `_auto_drying` is on (turning that off resets the whole schedule to 0
+  on the device, confirmed) — if the app appears to still show an old
+  schedule after that, it's most likely the app's own display not
+  refreshing rather than a real device-state mismatch.
 - Only one physical device (H14 Pro) has been used to build the property
   map — other `dreame.hold.*`/`mova.hold.*` models may expose different
   siid/piid numbers or additional status codes. The status sensor falls
