@@ -1,8 +1,9 @@
 """Data update coordinator for Dreame Hold."""
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
-from typing import Any
+from typing import Any, Callable
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_COUNTRY, CONF_PASSWORD, CONF_USERNAME
@@ -46,6 +47,7 @@ class DreameHoldDataUpdateCoordinator(DataUpdateCoordinator[dict[tuple[int, int]
             account_type=entry.data[CONF_ACCOUNT_TYPE],
             device_id=entry.data[CONF_DEVICE_ID],
         )
+        self._property_locks: dict[tuple[int, int], asyncio.Lock] = {}
 
     async def _async_update_data(self) -> dict[tuple[int, int], Any]:
         try:
@@ -72,3 +74,64 @@ class DreameHoldDataUpdateCoordinator(DataUpdateCoordinator[dict[tuple[int, int]
             if item.get("code") == 0:
                 data[(item["siid"], item["piid"])] = item.get("value")
         return data
+
+    async def async_update_property_atomic(
+        self, prop: tuple[int, int], mutate: Callable[[Any], Any]
+    ) -> None:
+        """Atomically read-modify-write a single property.
+
+        Used for PROP_SCHEDULED_DRYING_WEEKDAYS, which multiple entities
+        (7 weekday switches plus the start-time entity's mask-repair step)
+        all read-modify-write. `mutate` is a plain function: current raw
+        value -> new raw value to write (return the input unchanged to
+        skip the write entirely, e.g. when no change is needed).
+
+        Fixes a real problem found via live testing: the original version
+        of this pattern re-fetched a *fresh* value from the device before
+        every single write, specifically to avoid two near-simultaneous
+        toggles both computing their new mask from the same stale base
+        (whichever wrote last would silently undo the other's change).
+        That worked, but doubled network calls per toggle - with 7 quick
+        toggles (each already serialized by DreameCloudDevice's internal
+        send lock to one in-flight command at a time, ~0.6s/call), the
+        last of the 7 took over 8 seconds to complete, comfortably past
+        Home Assistant's frontend action timeout - producing exactly the
+        "connection lost" errors reported live.
+
+        This version removes the redundant read: an `asyncio.Lock` per
+        property makes the whole read-decide-write sequence one atomic
+        section (not just the individual network call, like
+        DreameCloudDevice._send_lock already does), so a queued-up second
+        toggle sees the *first toggle's own write* as its base the moment
+        it acquires the lock - no network round trip needed to learn that.
+        A device read only happens when there's no cached value yet at
+        all (e.g. right after startup, before the coordinator's first
+        poll) - self.data is otherwise kept authoritative for this
+        property by writing our own result back into it here, and gets
+        reconciled against the real device again on the next regular
+        poll regardless.
+        """
+        siid, piid = prop
+        lock = self._property_locks.setdefault(prop, asyncio.Lock())
+        async with lock:
+            if self.data and prop in self.data:
+                current = self.data[prop]
+            else:
+                fresh = await self.hass.async_add_executor_job(
+                    self.device.get_properties, [{"siid": siid, "piid": piid}]
+                )
+                current = 0
+                if fresh:
+                    match = next(
+                        (r for r in fresh if r.get("siid") == siid and r.get("piid") == piid), None
+                    )
+                    if match and match.get("code") == 0:
+                        current = match.get("value") or 0
+
+            new_value = mutate(current)
+            if new_value == current:
+                return
+
+            await self.hass.async_add_executor_job(self.device.set_property, siid, piid, new_value)
+            if self.data is not None:
+                self.data[prop] = new_value

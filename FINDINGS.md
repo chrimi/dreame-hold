@@ -273,6 +273,37 @@ this purpose — never committed, deleted after use):
   switching to `sys.path.append(...)` everywhere, so the standard library
   is always searched first.
 
+- **Critical bug found: "connection lost" when setting several weekday
+  switches (or a switch + the time entity) in quick succession.**
+  Reported live after the weekday-order fix above was deployed and
+  independently confirmed correct in the Dreame app. Root-caused via a
+  live timing test: `DreameCloudDevice._send_lock` correctly serializes
+  all cloud calls to one in-flight command at a time (~0.6s/call
+  measured live), but the old `DreameHoldWeekdaySwitch._set()` did a
+  *fresh device read* before every single write to avoid a race (see the
+  entry above) - doubling the calls needed per toggle. Simulating 7
+  concurrent toggles (asyncio, exactly how 7 near-simultaneous UI clicks
+  would each schedule their own executor job) showed the 7th one
+  completing only after **8.35s**, comfortably past what a browser
+  considers a hung action - explaining why single toggles worked fine
+  but several in a row didn't.
+
+  Fixed by replacing the per-call fresh-read with a real atomic critical
+  section: `DreameHoldDataUpdateCoordinator.async_update_property_atomic`
+  takes an `asyncio.Lock` per property and treats read-decide-write as
+  one section, using the coordinator's own cached `self.data` (updated
+  in-place immediately after each write) as the read source instead of
+  hitting the network again - a device read only happens once, when the
+  cache is empty (e.g. right after startup). Both
+  `DreameHoldWeekdaySwitch._set()` and the time entity's
+  `_ensure_valid_weekday_mask()` now go through this shared method (and
+  therefore the same lock), so they can't race each other either.
+  Re-ran the same 7-concurrent-toggle simulation against the real device
+  with the fix in place: **4.77s** for the slowest of the 7 (roughly
+  half, since each toggle now needs only 1 network call instead of 2),
+  and the final raw value (`1111111`, all 7 days set) confirmed no lost
+  updates.
+
 ## Open questions
 
 - **Does `2:1` flap between `7` and `15` at 100% battery, or was 15:16:36

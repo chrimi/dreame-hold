@@ -83,26 +83,19 @@ class DreameHoldScheduledDryingTime(DreameHoldEntity, TimeEntity):
         default ("repeats on no days" — invalid, the app couldn't display
         it at all) instead of a valid one-time schedule ("10000000").
 
-        Fetches a fresh mask (not the coordinator's cached one) and
-        corrects only its one-time flag via derive_one_time_flag, leaving
-        any already-selected days untouched — so setting the time after
-        picking days doesn't turn a repeating schedule into a one-time one.
+        Goes through the coordinator's `async_update_property_atomic`
+        (same as the weekday switches in switch.py) rather than reading
+        the device directly, so this can't race against a weekday switch
+        toggled around the same time, and doesn't add an extra network
+        round trip on top of whatever the weekday switches already did.
         """
-        wd_siid, wd_piid = PROP_SCHEDULED_DRYING_WEEKDAYS
-        fresh = await self.hass.async_add_executor_job(
-            self.coordinator.device.get_properties, [{"siid": wd_siid, "piid": wd_piid}]
-        )
-        current = 0
-        if fresh:
-            match = next((r for r in fresh if r.get("siid") == wd_siid and r.get("piid") == wd_piid), None)
-            if match and match.get("code") == 0:
-                current = match.get("value") or 0
 
-        decoded = decode_weekday_mask(current)
-        days = {day: decoded[day] for day in WEEKDAYS}
-        correct_one_time = derive_one_time_flag(days)
-        if decoded["one_time"] == correct_one_time:
-            return  # already valid, no write needed
+        def mutate(current: int) -> int:
+            decoded = decode_weekday_mask(current)
+            days = {day: decoded[day] for day in WEEKDAYS}
+            correct_one_time = derive_one_time_flag(days)
+            if decoded["one_time"] == correct_one_time:
+                return current  # already valid, no write needed
+            return encode_weekday_mask(days, one_time=correct_one_time)
 
-        new_mask = encode_weekday_mask(days, one_time=correct_one_time)
-        await self.hass.async_add_executor_job(self.coordinator.device.set_property, wd_siid, wd_piid, new_mask)
+        await self.coordinator.async_update_property_atomic(PROP_SCHEDULED_DRYING_WEEKDAYS, mutate)
