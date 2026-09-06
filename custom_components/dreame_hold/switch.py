@@ -57,11 +57,16 @@ async def async_setup_entry(
                 on_value=0,
                 off_value=1,
             ),
+            # "Custom mode: " prefix groups this with the other
+            # custom-cleaning-mode entities (select.py's "Custom mode:
+            # Suction power"/"...: Water level", and "...: Prepare
+            # electrolyzed water" below) in the UI - otherwise they sort
+            # alphabetically scattered with no visual connection.
             DreameHoldSwitch(
                 coordinator,
                 SwitchEntityDescription(
                     key="custom_cleaning_mode",
-                    name="Custom cleaning mode",
+                    name="Custom mode: Enabled",
                     entity_category=EntityCategory.CONFIG,
                 ),
                 prop=PROP_CUSTOM_MODE_ENABLED,
@@ -72,14 +77,14 @@ async def async_setup_entry(
                 coordinator,
                 SwitchEntityDescription(
                     key="prepare_electrolyzed_water",
-                    name="Prepare electrolyzed water",
+                    name="Custom mode: Prepare electrolyzed water",
                     entity_category=EntityCategory.CONFIG,
                 ),
                 prop=PROP_ELECTROLYZED_WATER_DISABLED,
                 on_value=0,
                 off_value=1,
                 # Confirmed on a real device: this can only actually be
-                # toggled while "Custom cleaning mode" is on.
+                # toggled while "Custom mode: Enabled" is on.
                 depends_on=(PROP_CUSTOM_MODE_ENABLED, 1),
             ),
             *[DreameHoldWeekdaySwitch(coordinator, day, index) for index, day in enumerate(WEEKDAYS)],

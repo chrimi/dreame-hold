@@ -12,6 +12,7 @@ from .const import (
     DOMAIN,
     DRYING_MODE_NAMES,
     LANGUAGE_NAMES,
+    PROP_CUSTOM_MODE_ENABLED,
     PROP_DRYING_MODE,
     PROP_DRYING_MODE_MIRROR,
     PROP_PROPULSION_FORCE,
@@ -51,16 +52,25 @@ async def async_setup_entry(
             ),
             DreameHoldEnumSelect(
                 coordinator,
+                # "Custom mode: " prefix groups this with the other
+                # custom-cleaning-mode entities (switch.py's "Custom mode:
+                # Enabled"/"...: Prepare electrolyzed water") in the UI,
+                # which otherwise sort alphabetically scattered across the
+                # device's entity list with no visual connection between
+                # them.
                 SelectEntityDescription(
-                    key="suction_power", name="Suction power", entity_category=EntityCategory.CONFIG
+                    key="suction_power", name="Custom mode: Suction power", entity_category=EntityCategory.CONFIG
                 ),
                 prop=PROP_SUCTION_POWER,
                 names=SUCTION_POWER_NAMES,
+                # Confirmed on a real device: only meaningful/usable while
+                # "Custom mode: Enabled" is on.
+                depends_on=(PROP_CUSTOM_MODE_ENABLED, 1),
             ),
             DreameHoldEnumSelect(
                 coordinator,
                 SelectEntityDescription(
-                    key="water_level", name="Water level", entity_category=EntityCategory.CONFIG
+                    key="water_level", name="Custom mode: Water level", entity_category=EntityCategory.CONFIG
                 ),
                 prop=PROP_WATER_LEVEL,
                 names=WATER_LEVEL_NAMES,
@@ -71,6 +81,7 @@ async def async_setup_entry(
                 # select, since picking it doesn't correspond to a real app
                 # action.
                 selectable_options=["daily", "wet"],
+                depends_on=(PROP_CUSTOM_MODE_ENABLED, 1),
             ),
             # NOTE: "Cleaning mode" (PROP_CLEANING_MODE) is NOT here - see
             # sensor.py. Confirmed on a real device that selecting
@@ -106,6 +117,12 @@ class DreameHoldEnumSelect(DreameHoldEntity, SelectEntity):
     "level_2" the app itself never lets you pick directly (only "daily"/
     "wet" are real choices in Personalized Mode); defaults to all of
     `names` when not given.
+
+    `depends_on` marks the entity unavailable unless another property
+    currently equals a required value - e.g. Suction power/Water level
+    only actually apply while "Custom mode: Enabled" is on (confirmed on
+    a real device), matching the same pattern switch.py's
+    `DreameHoldSwitch` uses.
     """
 
     def __init__(
@@ -116,6 +133,7 @@ class DreameHoldEnumSelect(DreameHoldEntity, SelectEntity):
         names: dict[int, str],
         mirror_prop: tuple[int, int] | None = None,
         selectable_options: list[str] | None = None,
+        depends_on: tuple[tuple[int, int], int] | None = None,
     ) -> None:
         super().__init__(coordinator)
         self.entity_description = description
@@ -123,8 +141,18 @@ class DreameHoldEnumSelect(DreameHoldEntity, SelectEntity):
         self._mirror_prop = mirror_prop
         self._names = names
         self._values = {v: k for k, v in names.items()}
+        self._depends_on = depends_on
         self._attr_unique_id = f"{coordinator.device.device_id}_{description.key}"
         self._attr_options = list(names.values()) if selectable_options is None else selectable_options
+
+    @property
+    def available(self) -> bool:
+        if not super().available:
+            return False
+        if self._depends_on is not None:
+            dep_prop, dep_value = self._depends_on
+            return self._property(dep_prop) == dep_value
+        return True
 
     @property
     def current_option(self) -> str | None:

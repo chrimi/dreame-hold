@@ -156,10 +156,17 @@ principle. Specific findings:
   those two directly to see if that's what really switches the mode) or
   checking whether mode-switching uses an `action` (siid/aiid) call
   instead of `set_property`.
-- **`PROP_ELECTROLYZED_WATER_DISABLED` (`16:3`) only works while
+- **`PROP_ELECTROLYZED_WATER_DISABLED` (`16:3`), `PROP_SUCTION_POWER`
+  (`16:1`), and `PROP_WATER_LEVEL` (`16:2`) only apply while
   `PROP_CUSTOM_MODE_ENABLED` (`16:6`) is on.** Confirmed on the real
-  device — modeled in the integration as an `available`/unavailable
-  dependency between the two switch entities.
+  device — the owner found Suction power/Water level stayed selectable
+  in HA even with Custom mode off, which the app itself doesn't allow.
+  All three now get the same `available`/unavailable `depends_on`
+  treatment. Also renamed these four entities (plus the Custom mode
+  switch itself) with a shared "Custom mode: " prefix, since they
+  otherwise sort alphabetically scattered across the device's entity
+  list with no visual grouping — a UI issue reported separately from the
+  availability bug.
 - **`PROP_WATER_LEVEL`'s (`16:2`) `level_2` value is not a real
   Personalized-Mode choice.** The app's own water-level picker under
   "Personalized Mode" only offers two options ("daily"/"wet") — `level_2`

@@ -36,12 +36,18 @@ read-only integration. Confirmed working against a real device, with the
 exceptions noted under "Known limitations":
 
 - `switch.<name>_light`, `_auto_self_clean`, `_auto_drying`,
-  `_custom_cleaning_mode`, `_prepare_electrolyzed_water` (only usable
-  while `_custom_cleaning_mode` is on)
+  `_custom_cleaning_mode`, `_prepare_electrolyzed_water`
 - `select.<name>_drying_mode`, `_voice_language`, `_suction_power`,
-  `_water_level`, `_propulsion_force` — `_water_level` and
-  `_suction_power` are only meaningful in "Personalized" cleaning mode
+  `_water_level`, `_propulsion_force`
 - `number.<name>_voice_volume`
+
+`_custom_cleaning_mode`, `_prepare_electrolyzed_water`, `_suction_power`,
+and `_water_level` belong together (the app's "Custom mode" screen) and
+are named with a shared "Custom mode: ..." prefix so they sort together
+in the UI instead of scattering alphabetically across the device's
+entity list. `_suction_power`, `_water_level`, and
+`_prepare_electrolyzed_water` all report `unavailable` unless
+`_custom_cleaning_mode` is on (confirmed on a real device).
 - `time.<name>_scheduled_drying_time` and `switch.<name>_scheduled_drying_monday`
   through `_sunday` — the scheduled roller-brush-drying start time and
   weekday repeat pattern. **Less confirmed than everything else**: only
