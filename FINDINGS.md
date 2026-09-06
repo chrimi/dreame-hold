@@ -38,7 +38,7 @@ snapshots), **likely** (consistent pattern across 2 snapshots), **guess**
 | `1:7` | **"Automatische Selbstreinigung" disabled flag** (`0`=on, `1`=off) | likely | `1 -> 0` exactly when this setting (previously off by default) was turned on in the app. Same `0`=on/`1`=off convention as `1:9`, transition in the opposite direction (off->on here vs on->off there) — consistent pattern across both "Automatische ..." toggles. |
 | `1:8` and `1:10` | **Drying mode setting** (quiet / super-speed / ...) | confirmed | Jumped together `2->3` when "Trocknungsmodus" was set to "Super-Speed-Modus", and back `3->2` when reverted to "leiser Modus" — confirmed bidirectionally. |
 | `1:12` | **Scheduled drying start time**, seconds since midnight | confirmed | `0 -> 54000` when "Planmäßige Walzenbürstentrocknung" was enabled with start time 15:00. `54000 = 15*3600` — exact match. |
-| `1:13` | **Scheduled drying repeat pattern**: bit 0 = "one-time/no repeat" flag, bits 1-7 = weekday enabled (Mon..Sun) when repeating | confirmed | `0 -> 1110111` (i.e. `01110111` — the leading 0 is dropped since this is transmitted as an integer) for "daily except Thursday": bit0=`0` (is a repeating schedule), Mon..Sun=`1,1,1,0,1,1,1` (Thursday off) — exact match. Then `1110111 -> 10000000` when the daily repeat was turned off (one-time schedule): bit0=`1` (one-time flag set), all weekday bits `0` (irrelevant for a one-shot run) — confirms bit0's meaning. |
+| `1:13` | **Scheduled drying repeat pattern**: bit 0 = "one-time/no repeat" flag, bits 1-7 = weekday enabled when repeating, in **Sun,Sat,Fri,Thu,Wed,Tue,Mon order (reverse of Mon..Sun)** — see "Critical bug: weekday bit order was reversed" below | confirmed | `0 -> 1110111` (i.e. `01110111` — the leading 0 is dropped since this is transmitted as an integer) for "daily except Thursday": bit0=`0` (is a repeating schedule), bit4=`0` (Thursday off, same digit position either direction since it's the week's exact middle day) — exact match, but this sample is a palindrome and can't confirm direction. Then `1110111 -> 10000000` when the daily repeat was turned off (one-time schedule): bit0=`1` (one-time flag set), all weekday bits `0` (irrelevant for a one-shot run) — confirms bit0's meaning. Direction was only settled later by an asymmetric single-day write (see below). |
 
 ## Ruled out
 
@@ -230,6 +230,38 @@ this purpose — never committed, deleted after use):
   `1`-`7` numeric prefix so Home Assistant's alphabetical entity sort
   still lands in Monday..Sunday order (previously e.g. "Friday" sorted
   before "Monday").
+- **Critical bug found: weekday bit order was reversed relative to the
+  device.** The `1100000` sample above (Monday+Tuesday) only proves
+  `helpers.encode_weekday_mask`/`decode_weekday_mask` were *inverses of
+  each other* — it was a round-trip through our own code, never
+  cross-checked against what the Dreame app itself displayed. Same
+  problem with the original "daily except Thursday" sample used to
+  "confirm" a Monday-first digit order in the table above: `1110111` is
+  a palindrome (reads identically forwards and backwards), so it could
+  not actually distinguish a Monday-first order from a reversed one —
+  Thursday sits at digit position 4 either way, being the week's exact
+  middle day.
+
+  The bug surfaced live: setting the "Scheduled drying: 6 Saturday"
+  switch and a 15:00 start time produced `1:13 = 10` (padded
+  `00000010`, bit index 6 set) — read back correctly by our own decode
+  as Saturday — but the **Dreame app displayed the resulting schedule as
+  Tuesday**, not Saturday. This is also almost certainly the underlying
+  cause of an earlier report ("Scheduled Drying Einträge für die Tage
+  sind ungeordnet") that seemed cosmetic at the time.
+
+  Direct live testing (writing each of the 7 days individually and
+  reading back) confirmed the true digit order is **Sunday, Saturday,
+  Friday, Thursday, Wednesday, Tuesday, Monday** — exactly the reverse
+  of `WEEKDAYS`. Fixed via a new `_WIRE_ORDER = tuple(reversed(WEEKDAYS))`
+  constant in `helpers.py`, used by `encode_weekday_mask`/
+  `decode_weekday_mask` instead of `WEEKDAYS` directly; `WEEKDAYS` itself
+  stays Monday-first since it's also used for display/sort-order
+  elsewhere (switch.py's entity naming). Added
+  `test_wire_order_is_reversed_not_monday_first` pinning down the
+  asymmetric case so this can't silently regress. All 7 single-day
+  writes were re-verified live against the fixed code before and after
+  the change.
 - **Unrelated but discovered in the process**: `sys.path.insert(0, ...)`
   in the `dev/` scripts and `tests/conftest.py` made
   `custom_components/dreame_hold/select.py` and `.../time.py` shadow

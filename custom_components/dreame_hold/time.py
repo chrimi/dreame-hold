@@ -10,9 +10,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, PROP_AUTO_DRYING_DISABLED, PROP_SCHEDULED_DRYING_TIME
+from .const import (
+    DOMAIN,
+    PROP_AUTO_DRYING_DISABLED,
+    PROP_SCHEDULED_DRYING_TIME,
+    PROP_SCHEDULED_DRYING_WEEKDAYS,
+)
 from .coordinator import DreameHoldDataUpdateCoordinator
 from .entity import DreameHoldEntity
+from .helpers import WEEKDAYS, decode_weekday_mask, derive_one_time_flag, encode_weekday_mask
 
 SCHEDULED_DRYING_TIME_DESCRIPTION = TimeEntityDescription(
     key="scheduled_drying_time",
@@ -31,11 +37,8 @@ async def async_setup_entry(
 class DreameHoldScheduledDryingTime(DreameHoldEntity, TimeEntity):
     """Start time of the scheduled roller-brush-drying cycle.
 
-    CAUTION: the write direction for the whole scheduled-drying feature
-    (this entity plus the weekday switches in switch.py) is less
-    confirmed than the rest of the integration - only reading/decoding
-    real values has been verified, not writing a freshly-picked time back
-    to the device. See FINDINGS.md's "Live write-path testing" section.
+    Write path confirmed working live, including a 5-second read-back
+    (see FINDINGS.md's "Live write-path testing" section).
 
     Only available while "Automatic roller brush drying" is on - turning
     that off resets the schedule to 0 on the device (confirmed).
@@ -64,9 +67,42 @@ class DreameHoldScheduledDryingTime(DreameHoldEntity, TimeEntity):
 
     async def async_set_value(self, value: dt_time) -> None:
         seconds = value.hour * 3600 + value.minute * 60 + value.second
-        siid, piid = PROP_SCHEDULED_DRYING_TIME
+        time_siid, time_piid = PROP_SCHEDULED_DRYING_TIME
         try:
-            await self.hass.async_add_executor_job(self.coordinator.device.set_property, siid, piid, seconds)
+            await self.hass.async_add_executor_job(
+                self.coordinator.device.set_property, time_siid, time_piid, seconds
+            )
+            await self._ensure_valid_weekday_mask()
         except Exception as ex:
             raise HomeAssistantError(f"Failed to set scheduled drying time: {ex}") from ex
         await self.coordinator.async_request_refresh()
+
+    async def _ensure_valid_weekday_mask(self) -> None:
+        """Fix confirmed bug: setting a time without ever touching a
+        weekday switch left PROP_SCHEDULED_DRYING_WEEKDAYS at its all-zero
+        default ("repeats on no days" — invalid, the app couldn't display
+        it at all) instead of a valid one-time schedule ("10000000").
+
+        Fetches a fresh mask (not the coordinator's cached one) and
+        corrects only its one-time flag via derive_one_time_flag, leaving
+        any already-selected days untouched — so setting the time after
+        picking days doesn't turn a repeating schedule into a one-time one.
+        """
+        wd_siid, wd_piid = PROP_SCHEDULED_DRYING_WEEKDAYS
+        fresh = await self.hass.async_add_executor_job(
+            self.coordinator.device.get_properties, [{"siid": wd_siid, "piid": wd_piid}]
+        )
+        current = 0
+        if fresh:
+            match = next((r for r in fresh if r.get("siid") == wd_siid and r.get("piid") == wd_piid), None)
+            if match and match.get("code") == 0:
+                current = match.get("value") or 0
+
+        decoded = decode_weekday_mask(current)
+        days = {day: decoded[day] for day in WEEKDAYS}
+        correct_one_time = derive_one_time_flag(days)
+        if decoded["one_time"] == correct_one_time:
+            return  # already valid, no write needed
+
+        new_mask = encode_weekday_mask(days, one_time=correct_one_time)
+        await self.hass.async_add_executor_job(self.coordinator.device.set_property, wd_siid, wd_piid, new_mask)

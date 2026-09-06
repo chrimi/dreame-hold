@@ -21,7 +21,7 @@ from .const import (
 )
 from .coordinator import DreameHoldDataUpdateCoordinator
 from .entity import DreameHoldEntity
-from .helpers import WEEKDAYS, decode_weekday_mask, encode_weekday_mask
+from .helpers import WEEKDAYS, decode_weekday_mask, derive_one_time_flag, encode_weekday_mask
 
 
 async def async_setup_entry(
@@ -156,12 +156,11 @@ class DreameHoldSwitch(DreameHoldEntity, SwitchEntity):
 class DreameHoldWeekdaySwitch(DreameHoldEntity, SwitchEntity):
     """One weekday bit of PROP_SCHEDULED_DRYING_WEEKDAYS.
 
-    CAUTION: less confirmed than other entities in this integration - only
-    reading/decoding real values has been verified. See FINDINGS.md's
-    "Live write-path testing" section. Only available while "Automatic
-    roller brush drying" is on (turning that off resets the whole
-    schedule to 0 on the device, confirmed) - modeled via `depends_on`
-    like the electrolyzed-water switch above.
+    Write path confirmed working live (see FINDINGS.md's "Live write-path
+    testing" section). Only available while "Automatic roller brush
+    drying" is on (turning that off resets the whole schedule to 0 on the
+    device, confirmed) - modeled via `depends_on` like the
+    electrolyzed-water switch above.
 
     All 7 of these share one encoded property, so toggling one requires a
     read-modify-write of the whole mask. `_set` deliberately fetches a
@@ -169,7 +168,9 @@ class DreameHoldWeekdaySwitch(DreameHoldEntity, SwitchEntity):
     coordinator's polled/cached value, which can be up to
     DEFAULT_SCAN_INTERVAL seconds stale) - toggling two of these switches
     in quick succession against a stale cached base would otherwise let
-    the second write silently undo the first.
+    the second write silently undo the first. It also re-derives the
+    mask's "one-time" flag from the resulting day selection (see
+    `derive_one_time_flag`) rather than preserving the previous flag.
 
     Names are prefixed with a 1-7 index so Home Assistant's alphabetical
     entity sort still lands in Monday..Sunday order.
@@ -215,8 +216,14 @@ class DreameHoldWeekdaySwitch(DreameHoldEntity, SwitchEntity):
 
         decoded = decode_weekday_mask(current)
         decoded[self._day] = enabled
-        one_time = decoded.pop("one_time")
-        new_value = encode_weekday_mask(decoded, one_time=one_time)
+        decoded.pop("one_time")
+        # Derive the one-time flag from the resulting day selection rather
+        # than preserving whatever it was before this toggle - a schedule
+        # can't be both "one-time" and repeat on specific days. Turning a
+        # day on always makes this a repeating schedule; turning the last
+        # remaining day off correctly falls back to "one-time" (see
+        # derive_one_time_flag's docstring for the bug this fixes).
+        new_value = encode_weekday_mask(decoded, one_time=derive_one_time_flag(decoded))
 
         try:
             await self.hass.async_add_executor_job(self.coordinator.device.set_property, siid, piid, new_value)

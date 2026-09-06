@@ -78,9 +78,27 @@ WEEKDAYS: tuple[str, ...] = (
     "saturday",
     "sunday",
 )
-"""Order matches PROP_SCHEDULED_DRYING_WEEKDAYS' digit order (confirmed:
-"daily except Thursday" decoded to Mon,Tue,Wed,Thu,Fri,Sat,Sun =
-1,1,1,0,1,1,1)."""
+"""Natural Monday-first order, used for display/iteration (e.g. switch.py's
+entity naming/sort index). NOT the device's wire bit order - see
+_WIRE_ORDER below, which is the reverse of this."""
+
+_WIRE_ORDER: tuple[str, ...] = tuple(reversed(WEEKDAYS))
+"""PROP_SCHEDULED_DRYING_WEEKDAYS' actual digit order: Sunday, Saturday,
+Friday, Thursday, Wednesday, Tuesday, Monday - the reverse of WEEKDAYS.
+
+Confirmed live: writing a single day via the (previously Monday-first)
+encoding and reading the raw value back showed the *app* displaying the
+schedule on a different day than intended in every case except
+Thursday - e.g. writing "Saturday" alone produced wire value 10 (padded
+"00000010", bit index 6 set), which the Dreame app showed scheduled for
+*Tuesday*, not Saturday. The earlier "daily except Thursday" sample used
+to originally confirm a Monday-first order was a false positive: that
+mask (1110111) is a palindrome, so it reads identically forwards and
+backwards and couldn't actually distinguish the two orderings - Thursday
+sits at the same digit position (4) either way, being the exact middle
+of the week. This asymmetric single-day sample is the first evidence
+that actually distinguishes direction, and it matches the reversed
+order exactly (bit index 6 -> Tuesday, the 6th entry of _WIRE_ORDER)."""
 
 
 def decode_weekday_mask(value: int) -> dict[str, bool]:
@@ -89,15 +107,14 @@ def decode_weekday_mask(value: int) -> dict[str, bool]:
     Transmitted as a plain int, so a leading 0 (the normal case: a
     repeating schedule) is dropped from the wire value — pad back to 8
     digits before splitting. Digit 0 is a "one-time, no repeat" flag;
-    digits 1-7 are Monday..Sunday enabled. Confirmed against two real
-    values: `1110111` (padded `01110111`) for "daily except Thursday",
-    and `10000000` for "repeat off" (one_time=True, no days).
+    digits 1-7 follow _WIRE_ORDER (Sunday..Monday, i.e. reversed
+    WEEKDAYS) - see that constant's docstring for how this was confirmed.
 
     Returns a dict with keys "one_time" plus one per WEEKDAYS entry.
     """
     digits = str(value).zfill(8)
     result: dict[str, bool] = {"one_time": digits[0] == "1"}
-    for i, day in enumerate(WEEKDAYS):
+    for i, day in enumerate(_WIRE_ORDER):
         result[day] = digits[i + 1] == "1"
     return result
 
@@ -106,12 +123,28 @@ def encode_weekday_mask(days: dict[str, bool], one_time: bool = False) -> int:
     """Inverse of decode_weekday_mask. `days` maps weekday name -> enabled;
     a day missing from `days` is treated as disabled.
 
-    CAUTION: only the two real values above have been confirmed to
-    round-trip correctly. Writing this property back to the device with a
-    freshly-encoded value has not been tested (see FINDINGS.md's "Live
-    write-path testing" section) — the write direction for the scheduled-
-    drying feature is more speculative than the rest of this integration.
+    Confirmed live: writing a freshly-encoded value back to the device
+    persists correctly (see FINDINGS.md's "Live write-path testing"
+    section). Callers should generally pass `one_time=derive_one_time_flag(days)`
+    rather than preserving a previously-read flag — see that function's
+    docstring for why.
     """
     flag = "1" if one_time else "0"
-    day_digits = "".join("1" if days.get(day) else "0" for day in WEEKDAYS)
+    day_digits = "".join("1" if days.get(day) else "0" for day in _WIRE_ORDER)
     return int(flag + day_digits)
+
+
+def derive_one_time_flag(days: dict[str, bool]) -> bool:
+    """Whether a weekday mask should be encoded as "one-time" (no repeat).
+
+    A schedule can't simultaneously be "one-time" and repeat on specific
+    days, so the flag should always be derived from the day selection
+    rather than independently preserved: no days selected -> one-time
+    (the real device's own "10000000" state, confirmed - see
+    FINDINGS.md); any day selected -> repeating. Confirmed bug otherwise:
+    setting a start time without ever selecting a day left the weekday
+    mask at its all-zero default (`0`, decoding to "repeats on no
+    days" — not the same as "10000000"/one-time — the app couldn't
+    display it at all) instead of a valid one-time schedule.
+    """
+    return not any(days.get(day, False) for day in WEEKDAYS)

@@ -1,5 +1,11 @@
 """Tests for helpers.py — pure logic, no Home Assistant dependency."""
-from helpers import WEEKDAYS, decode_weekday_mask, encode_weekday_mask, soiling_percentages
+from helpers import (
+    WEEKDAYS,
+    decode_weekday_mask,
+    derive_one_time_flag,
+    encode_weekday_mask,
+    soiling_percentages,
+)
 
 
 def test_matches_real_observed_run():
@@ -67,3 +73,57 @@ def test_decode_missing_days_default_to_disabled():
     assert encode_weekday_mask({"monday": True}) == encode_weekday_mask(
         {"monday": True, "tuesday": False, "wednesday": False}
     )
+
+
+def test_wire_order_is_reversed_not_monday_first():
+    """Regression test for a confirmed live bug: the "daily except
+    Thursday" sample used to originally "confirm" a Monday-first digit
+    order is a palindrome (1110111 reads the same forwards/backwards), so
+    it couldn't actually distinguish direction - Thursday sits at digit
+    position 4 either way, being the exact middle of the week.
+
+    A real asymmetric single-day write exposed the truth: writing
+    "saturday" alone (under the old, buggy Monday-first order) produced
+    wire value 10 - and the Dreame app displayed that schedule as
+    *Tuesday*, not Saturday. So the true digit order is Sunday, Saturday,
+    Friday, Thursday, Wednesday, Tuesday, Monday - the reverse of
+    WEEKDAYS. This test pins that down explicitly: "saturday" alone must
+    NOT reproduce wire value 10 (the old bug), and "tuesday" alone must
+    (matching what the app actually showed for that raw value).
+    """
+    saturday_only = {day: False for day in WEEKDAYS}
+    saturday_only["saturday"] = True
+    assert encode_weekday_mask(saturday_only, one_time=False) != 10
+
+    tuesday_only = {day: False for day in WEEKDAYS}
+    tuesday_only["tuesday"] = True
+    assert encode_weekday_mask(tuesday_only, one_time=False) == 10
+    assert decode_weekday_mask(10) == {
+        "one_time": False,
+        "monday": False,
+        "tuesday": True,
+        "wednesday": False,
+        "thursday": False,
+        "friday": False,
+        "saturday": False,
+        "sunday": False,
+    }
+
+
+def test_derive_one_time_flag_true_when_no_days_selected():
+    assert derive_one_time_flag({}) is True
+    assert derive_one_time_flag({day: False for day in WEEKDAYS}) is True
+
+
+def test_derive_one_time_flag_false_when_any_day_selected():
+    assert derive_one_time_flag({"monday": True}) is False
+    assert derive_one_time_flag({day: True for day in WEEKDAYS}) is False
+
+
+def test_setting_time_with_no_days_produces_valid_one_time_mask():
+    """Regression test for the reported bug: a time-only schedule (no
+    weekday ever touched) must encode as "10000000" (one-time, no
+    repeat) — not "0" (repeats on no days), which the app can't display."""
+    days = {day: False for day in WEEKDAYS}
+    encoded = encode_weekday_mask(days, one_time=derive_one_time_flag(days))
+    assert encoded == 10000000
