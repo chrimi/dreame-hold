@@ -369,7 +369,23 @@ this purpose — never committed, deleted after use):
      first creation, so its stale registry entry was removed via
      `ha_remove_entity` so the next restart generates the correct
      `scheduled_drying_enabled` id from scratch instead of keeping a
-     `..._0_enabled` id forever.
+     `..._0_enabled` id forever. **Correction, confirmed live:** removing
+     the entity and reloading (twice, including across a full restart)
+     did *not* regenerate a clean id - it kept reusing
+     `..._0_enabled` even though `unique_id` and `original_name` in the
+     registry were already correct. Root cause not fully pinned down;
+     left as a harmless cosmetic mismatch (functionality, `unique_id`,
+     and the displayed friendly name are all correct - only the raw
+     `entity_id` string retains the old "0") rather than spending more
+     full-house restarts chasing it. Fixable manually via Home
+     Assistant's own entity settings (Rename → Entity ID) if desired.
+  3. **The time entity sorted above "Enabled" despite needing Enabled on
+     first** - caused by an inconsistent name: it was "Scheduled drying
+     start time" (no colon-prefix) while every other entity in this
+     group uses "Scheduled drying: X", so it fell outside that
+     alphabetical cluster entirely. Renamed to "Scheduled drying: Start
+     time" for consistency, which also fixes the ordering as a side
+     effect ("Enabled" < "Start time" alphabetically).
 - **Cleaning mode sensor showed "personalized" while Custom mode was
   off - confirmed as a real display bug, not a device/read error.**
   Live values at the time: `16:6` (Custom mode enabled) = `0`, `16:7`

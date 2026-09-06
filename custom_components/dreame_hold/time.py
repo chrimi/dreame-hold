@@ -21,7 +21,15 @@ from .helpers import WEEKDAYS, decode_weekday_mask, derive_one_time_flag, encode
 
 SCHEDULED_DRYING_TIME_DESCRIPTION = TimeEntityDescription(
     key="scheduled_drying_time",
-    name="Scheduled drying start time",
+    # "Scheduled drying: " prefix (matching switch.py's "Enabled"/weekday
+    # names) rather than the previous "Scheduled drying start time" -
+    # reported live: with the old, differently-formatted name this sorted
+    # outside the alphabetical group of the other schedule entities,
+    # landing above "Scheduled drying: Enabled" even though the time
+    # entity is only meant to be adjusted after Enabled is turned on.
+    # "Enabled" < "Start time" alphabetically, so this also fixes the
+    # ordering as a side effect.
+    name="Scheduled drying: Start time",
     entity_category=EntityCategory.CONFIG,
 )
 
