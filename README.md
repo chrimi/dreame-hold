@@ -7,11 +7,16 @@ covers for robot vacuums to this device class instead — the same relationship
 the [dreame-mower](https://github.com/antondaubert/dreame-mower) forks have
 to it for lawn mowers. See NOTICE.md for full provenance.
 
-**Status: late alpha.** Confirmed working against one device (H14 Pro,
-model `dreame.hold.w2306f`), including a live test of the write path — but
-several entities are still speculative or have known issues (see "Known
-limitations" below), there's no real-world usage history yet, and only one
-physical device has ever been tested against. Read-only status entities:
+**Status: beta.** Confirmed working against one device (H14 Pro,
+model `dreame.hold.w2306f`), with every settings entity's write path
+verified live end-to-end - including several real bugs found and fixed
+that way (a reversed weekday-bit order, a race condition, a
+"connection lost" timing issue, and a couple of incorrect
+property-dependency assumptions; see FINDINGS.md for the full
+diagnosis of each). Still no real-world usage history beyond this
+testing, and only one physical device has ever been tested against -
+see "Known limitations" below for what's still open. Read-only status
+entities:
 
 - `sensor.<name>_battery` — battery level (%)
 - `binary_sensor.<name>_charging` — on while the device reports the raw
@@ -210,7 +215,11 @@ that the untested surface stays small. Runs on push/PR via
     between "quiet"/"turbo" when written — it's exposed as a **read-only
     sensor** instead (`sensor.<name>_cleaning_mode`) until the real write
     mechanism is found. Likely a derived reflection of suction
-    power + water level rather than independently settable.
+    power + water level rather than independently settable. Only
+    available while `_custom_cleaning_mode` is on - confirmed with the
+    device owner that the app itself only shows this picker once Custom
+    mode is being turned on, so the raw value while off is just a
+    remembered last selection, not anything currently active.
   - `switch.<name>_prepare_electrolyzed_water` only works while
     `switch.<name>_custom_cleaning_mode` is on — modeled as an
     `available`/unavailable dependency between the two entities.
@@ -218,17 +227,19 @@ that the untested surface stays small. Runs on push/PR via
     seen as a side effect of "Leiser Modus") is decodable for reading but
     not offered as something to select — the app's own Personalized-Mode
     picker only offers "daily"/"wet".
-- **Scheduled roller brush drying**: the raw write mechanism is now
-  confirmed working (writing the start time directly persisted correctly
-  in a live test, including a 5-second read-back), and a real race
-  condition in the weekday switches (stale coordinator-cached
-  read-modify-write, letting rapid consecutive day toggles clobber each
-  other) has been found and fixed — see FINDINGS.md's "Scheduled-drying
-  entities" section for the full diagnosis. Only usable while
-  `_auto_drying` is on (turning that off resets the whole schedule to 0
-  on the device, confirmed) — if the app appears to still show an old
-  schedule after that, it's most likely the app's own display not
-  refreshing rather than a real device-state mismatch.
+- **Scheduled roller brush drying** (`_scheduled_drying_0_enabled`,
+  `_1_start_time`, `_2_monday` through `_8_sunday`): fully working and
+  live-verified, after fixing several real bugs found along the way -
+  see FINDINGS.md for the full diagnosis of each: a reversed weekday-bit
+  wire order (a day picked in Home Assistant landed on the wrong day in
+  the app), a "connection lost" error when several of these were
+  toggled in quick succession (a redundant network read per toggle,
+  replaced with an atomic in-memory read-modify-write), and an
+  incorrect assumption that `_auto_drying` gates this feature (it
+  doesn't - confirmed independent). Entity names carry a numeric sort
+  prefix because Home Assistant's device page has no other way to show
+  them in a sensible order (see FINDINGS.md for why a plain-name
+  version was tried and reverted).
 - Only one physical device (H14 Pro) has been used to build the property
   map — other `dreame.hold.*`/`mova.hold.*` models may expose different
   siid/piid numbers or additional status codes. The status sensor falls
