@@ -92,8 +92,16 @@ PROP_AUTO_SELFCLEAN_DISABLED: Final = (1, 7)
 
 PROP_AUTO_DRYING_DISABLED: Final = (1, 9)
 """'Automatische Walzenbürstentrocknung' disabled flag: 0=on, 1=off.
-Turning this off also resets PROP_SCHEDULED_DRYING_TIME/_WEEKDAYS to 0 -
-the schedule is a child of this setting, not independent."""
+Automatically dries the roller brush right after a self-clean cycle -
+independent of PROP_SCHEDULED_DRYING_TIME/_WEEKDAYS (the time-of-day
+schedule), confirmed by two live tests: writing this property directly
+does not touch the schedule properties either way, and separately
+isolating the app's own "Scheduled roller brush drying" toggle showed it
+writes PROP_SCHEDULED_DRYING_TIME/_WEEKDAYS directly with no third
+property involved. An earlier version of this docstring claimed a
+parent/child relationship based on a single probe snapshot where both
+happened to change together - that was two separate app actions
+landing in one snapshot, not a causal link; see FINDINGS.md."""
 
 PROP_DRYING_MODE: Final = (1, 8)
 PROP_DRYING_MODE_MIRROR: Final = (1, 10)
@@ -102,7 +110,12 @@ PROP_STATUS/PROP_STATUS_MIRROR; write both when setting."""
 
 PROP_SCHEDULED_DRYING_TIME: Final = (1, 12)
 """Scheduled drying start time, seconds since midnight (54000 = 15:00:00
-exactly). 0 when no schedule is set."""
+exactly). 0 when no schedule is set - confirmed this is also exactly how
+the app's own "Scheduled roller brush drying" off-switch represents
+"disabled": isolating that one toggle (with every other siid=1/16
+property monitored live) showed it write this property AND
+PROP_SCHEDULED_DRYING_WEEKDAYS to 0 together, with nothing else
+involved - there's no separate boolean "enabled" property."""
 
 PROP_SCHEDULED_DRYING_WEEKDAYS: Final = (1, 13)
 """Scheduled drying repeat pattern as an 8-digit string (transmitted as an

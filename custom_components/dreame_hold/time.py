@@ -12,7 +12,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
     DOMAIN,
-    PROP_AUTO_DRYING_DISABLED,
     PROP_SCHEDULED_DRYING_TIME,
     PROP_SCHEDULED_DRYING_WEEKDAYS,
 )
@@ -40,8 +39,13 @@ class DreameHoldScheduledDryingTime(DreameHoldEntity, TimeEntity):
     Write path confirmed working live, including a 5-second read-back
     (see FINDINGS.md's "Live write-path testing" section).
 
-    Only available while "Automatic roller brush drying" is on - turning
-    that off resets the schedule to 0 on the device (confirmed).
+    Independent of "Automatic roller brush drying"
+    (PROP_AUTO_DRYING_DISABLED) - confirmed live that toggling that
+    switch doesn't affect this property either way (see that constant's
+    docstring), so availability isn't gated on it. A value of 0 (shown
+    here as no time set) is itself the device's own "no schedule"
+    state - see "Scheduled drying: Enabled" in switch.py for a friendlier
+    on/off toggle around that.
     """
 
     entity_description = SCHEDULED_DRYING_TIME_DESCRIPTION
@@ -49,12 +53,6 @@ class DreameHoldScheduledDryingTime(DreameHoldEntity, TimeEntity):
     def __init__(self, coordinator: DreameHoldDataUpdateCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.device.device_id}_{self.entity_description.key}"
-
-    @property
-    def available(self) -> bool:
-        if not super().available:
-            return False
-        return self._property(PROP_AUTO_DRYING_DISABLED) == 0
 
     @property
     def native_value(self) -> dt_time | None:

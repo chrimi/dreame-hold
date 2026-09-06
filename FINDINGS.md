@@ -34,7 +34,7 @@ snapshots), **likely** (consistent pattern across 2 snapshots), **guess**
 | `16:7` | **Active cleaning-mode selector**: `Leiser Modus=1, Turbomodus=3, Personalisiert=4` (value `2` not yet captured) | likely | Tracks the top-level mode: `4` across all Personalisiert snapshots, `3` under Turbomodus, `1` under Leiser Modus. `16:1` (Saugleistung) moves with it too (`1`/leicht under Leiser Modus, `3`/stark under Turbomodus) — presets imply both Saugleistung and Wasserstand values. Sticky: keeps its last value (`1`) even after "Benutzerdefiniert" is turned off — doesn't reset to a distinct "off" sentinel. |
 | `16:6` | **"Benutzerdefiniert" (custom cleaning mode) master on/off flag** (`0`=off, `1`=on) | confirmed | Isolated test: turning "Benutzerdefiniert" off changed only `16:6` (`1->0`); `16:7` (sub-mode) stayed at its last value. Turning it back on (to "Leiser Modus") flipped it back `0->1`, alongside `16:3` (see below) — retroactively also explains the earlier unexplained `0->1` jump between the first two siid-16 snapshots. |
 | `16:3` | **"Prepare Electrolyzed Water" toggle** (`0`=on, `1`=off) | likely | `1 -> 0` when this setting was enabled, alongside turning "Benutzerdefiniert" back on (to Leiser Modus) in the same step — but `16:6` alone fully accounts for the Benutzerdefiniert part of that change, leaving `16:3` as the one property attributable to the electrolyzed-water toggle. Same `0`=on/`1`=off convention as `1:7`/`1:9`. Not as cleanly isolated as the other siid-16 entries (two settings changed at once) — a fully isolated test would help confirm. |
-| `1:9` | **"Automatische Walzenbürstentrocknung" disabled flag** (`0`=on/default, `1`=off) | likely | `0 -> 1` exactly when this setting was turned off in the app. Turning it off also reset `1:12`/`1:13` (the scheduled-drying start time/pattern) to `0` — suggests "Automatische Walzenbürstentrocknung" is a parent toggle that the "Planmäßige Walzenbürstentrocknung" schedule depends on, not an independent setting. |
+| `1:9` | **"Automatische Walzenbürstentrocknung" disabled flag** (`0`=on/default, `1`=off) - dries the roller brush automatically right after a self-clean cycle, **independent** of the "Planmäßige Walzenbürstentrocknung" schedule (`1:12`/`1:13`) despite an earlier note here claiming otherwise - see "Correction: 1:9 and the schedule are independent" below | confirmed | `0 -> 1` exactly when this setting was turned off in the app. |
 | `1:7` | **"Automatische Selbstreinigung" disabled flag** (`0`=on, `1`=off) | likely | `1 -> 0` exactly when this setting (previously off by default) was turned on in the app. Same `0`=on/`1`=off convention as `1:9`, transition in the opposite direction (off->on here vs on->off there) — consistent pattern across both "Automatische ..." toggles. |
 | `1:8` and `1:10` | **Drying mode setting** (quiet / super-speed / ...) | confirmed | Jumped together `2->3` when "Trocknungsmodus" was set to "Super-Speed-Modus", and back `3->2` when reverted to "leiser Modus" — confirmed bidirectionally. |
 | `1:12` | **Scheduled drying start time**, seconds since midnight | confirmed | `0 -> 54000` when "Planmäßige Walzenbürstentrocknung" was enabled with start time 15:00. `54000 = 15*3600` — exact match. |
@@ -303,6 +303,47 @@ this purpose — never committed, deleted after use):
   half, since each toggle now needs only 1 network call instead of 2),
   and the final raw value (`1111111`, all 7 days set) confirmed no lost
   updates.
+
+- **Correction: `1:9` ("Automatic roller brush drying") and the
+  `1:12`/`1:13` schedule are independent, not parent/child.** The
+  original property-mapping table above claimed turning `1:9` off also
+  reset the schedule to 0, based on a single probe snapshot where both
+  changed together. The device owner corrected this: `1:9` dries the
+  roller brush automatically right after a self-clean cycle - a
+  different feature entirely from the time-of-day schedule, and the app
+  presents them as two independent settings. Two live tests confirm the
+  owner's correction and disprove the original table entry:
+  1. Writing `1:9` directly (on -> off -> on) while a schedule was
+     configured left `1:12`/`1:13` completely untouched throughout.
+  2. Isolating the app's own "Scheduled roller brush drying" toggle
+     specifically (with a live monitor watching every `siid=1`/`16`
+     property every few seconds) showed turning it off writes
+     `1:12`/`1:13` to `0` **together, with nothing else changing** - not
+     `1:9`. This also answers what a "disabled schedule" actually is:
+     there's no separate boolean property for it at all - the app's own
+     "off" state for this feature *is* both properties being `0`,
+     confirming `1:12`'s docstring ("0 when no schedule is set").
+
+  The original snapshot that suggested a link was almost certainly two
+  separate app actions (disabling `1:9` and separately clearing the
+  schedule) landing in one coarse probe interval, not a causal
+  relationship. Removed the `depends_on`-style availability coupling
+  this had caused in `time.py`/`switch.py` (time entity and weekday
+  switches were incorrectly marked unavailable whenever `1:9` was off).
+
+  Since there's no dedicated enable/disable property, and a raw `time`
+  entity's `0` value looks like "midnight", not "off" (poor UX - flagged
+  by the owner: "die einzige Option [ist] Uhrzeit-Werte löschen? ...
+  ux-mäßig echt ... naja"), added a synthetic
+  `switch.<name>_scheduled_drying_enabled` in switch.py that wraps this:
+  off writes both properties to 0 (exactly what the app does), on
+  restores the last non-zero (time, weekday-mask) pair via a new
+  `DreameHoldDataUpdateCoordinator.last_known_schedule` cache (updated on
+  every poll and every schedule write) rather than leaving the user to
+  re-enter everything - falling back to a sane default (15:00, one-time)
+  if nothing has been observed yet this session. Verified live: configure
+  a schedule, turn "off" (both -> 0, confirmed), turn back "on" -
+  original schedule (15:00, Saturday) exactly restored.
 
 ## Open questions
 

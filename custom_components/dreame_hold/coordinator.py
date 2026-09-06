@@ -19,6 +19,8 @@ from .const import (
     DOMAIN,
     LOGGER,
     POLLED_PROPERTIES,
+    PROP_SCHEDULED_DRYING_TIME,
+    PROP_SCHEDULED_DRYING_WEEKDAYS,
 )
 from .dreame_cloud.cloud_device import DreameCloudDevice
 
@@ -48,6 +50,15 @@ class DreameHoldDataUpdateCoordinator(DataUpdateCoordinator[dict[tuple[int, int]
             device_id=entry.data[CONF_DEVICE_ID],
         )
         self._property_locks: dict[tuple[int, int], asyncio.Lock] = {}
+        self.last_known_schedule: tuple[int, int] | None = None
+        """Last observed non-zero (time_seconds, weekday_mask) pair for
+        the scheduled-drying feature. The device itself has no memory of
+        a schedule once cleared (both properties just go to 0 - see
+        PROP_SCHEDULED_DRYING_TIME's docstring) - kept here purely so
+        "Scheduled drying: Enabled" can restore your last configuration
+        when turned back on instead of leaving both blank. In-memory
+        only, so it starts empty again after a Home Assistant restart if
+        the device's own schedule is 0 at that point."""
 
     async def _async_update_data(self) -> dict[tuple[int, int], Any]:
         try:
@@ -73,7 +84,18 @@ class DreameHoldDataUpdateCoordinator(DataUpdateCoordinator[dict[tuple[int, int]
         for item in result:
             if item.get("code") == 0:
                 data[(item["siid"], item["piid"])] = item.get("value")
+        self._maybe_cache_schedule(data)
         return data
+
+    def _maybe_cache_schedule(self, data: dict[tuple[int, int], Any]) -> None:
+        """Update `last_known_schedule` if `data` holds a non-zero start
+        time - see that attribute's docstring. Reads both properties from
+        the same `data` snapshot so the cached pair is always internally
+        consistent (never a time from one moment paired with a mask from
+        another)."""
+        time_val = data.get(PROP_SCHEDULED_DRYING_TIME)
+        if time_val:
+            self.last_known_schedule = (time_val, data.get(PROP_SCHEDULED_DRYING_WEEKDAYS) or 0)
 
     async def async_update_property_atomic(
         self, prop: tuple[int, int], mutate: Callable[[Any], Any]
@@ -135,3 +157,4 @@ class DreameHoldDataUpdateCoordinator(DataUpdateCoordinator[dict[tuple[int, int]
             await self.hass.async_add_executor_job(self.device.set_property, siid, piid, new_value)
             if self.data is not None:
                 self.data[prop] = new_value
+                self._maybe_cache_schedule(self.data)

@@ -48,17 +48,27 @@ in the UI instead of scattering alphabetically across the device's
 entity list. `_suction_power`, `_water_level`, and
 `_prepare_electrolyzed_water` all report `unavailable` unless
 `_custom_cleaning_mode` is on (confirmed on a real device).
-- `time.<name>_scheduled_drying_time` and `switch.<name>_scheduled_drying_1_monday`
-  through `_7_sunday` — the scheduled roller-brush-drying start time and
-  weekday repeat pattern. Reading, writing, and the weekday bit mapping
-  have all been verified live end-to-end, including a critical fix: the
-  weekday bits are wired up in reverse order on the device (Sunday,
-  Saturday, Friday, Thursday, Wednesday, Tuesday, Monday) — an earlier
-  version of this integration got that backwards, silently scheduling
-  the mirrored day instead (e.g. "Saturday" actually landed on Tuesday).
-  See FINDINGS.md's "Critical bug: weekday bit order was reversed"
-  section. Only usable while `_auto_drying` is on (turning that off
-  resets the whole schedule to 0 on the device, confirmed).
+- `time.<name>_scheduled_drying_time`, `switch.<name>_scheduled_drying_0_enabled`,
+  and `switch.<name>_scheduled_drying_1_monday` through `_7_sunday` — the
+  scheduled roller-brush-drying feature: start time, a master on/off, and
+  the weekday repeat pattern. Reading, writing, and the weekday bit
+  mapping have all been verified live end-to-end, including a critical
+  fix: the weekday bits are wired up in reverse order on the device
+  (Sunday, Saturday, Friday, Thursday, Wednesday, Tuesday, Monday) — an
+  earlier version of this integration got that backwards, silently
+  scheduling the mirrored day instead (e.g. "Saturday" actually landed on
+  Tuesday). See FINDINGS.md's "Critical bug: weekday bit order was
+  reversed" section. Independent of `_auto_drying` (a different,
+  unrelated feature that dries the roller brush right after a
+  self-clean cycle — an earlier version of this README/FINDINGS
+  incorrectly claimed a dependency here; see FINDINGS.md's "Correction:
+  1:9 and the schedule are independent"). There's no separate
+  enable/disable property for the schedule itself — the device's own
+  "off" state is simply the start time and weekday mask both being 0 —
+  so `_scheduled_drying_0_enabled` synthesizes a proper switch around
+  that and remembers your last configured time/weekdays so turning it
+  back on doesn't leave you reconfiguring from scratch (in-memory only;
+  reset if Home Assistant restarts while the schedule is off).
 
 See `custom_components/dreame_hold/const.py` for the exact siid/piid
 property map and its confidence level, and [`FINDINGS.md`](FINDINGS.md) for

@@ -17,6 +17,7 @@ from .const import (
     PROP_CUSTOM_MODE_ENABLED,
     PROP_ELECTROLYZED_WATER_DISABLED,
     PROP_LIGHT_SWITCH,
+    PROP_SCHEDULED_DRYING_TIME,
     PROP_SCHEDULED_DRYING_WEEKDAYS,
 )
 from .coordinator import DreameHoldDataUpdateCoordinator
@@ -87,6 +88,7 @@ async def async_setup_entry(
                 # toggled while "Custom mode: Enabled" is on.
                 depends_on=(PROP_CUSTOM_MODE_ENABLED, 1),
             ),
+            DreameHoldScheduledDryingEnabledSwitch(coordinator),
             *[DreameHoldWeekdaySwitch(coordinator, day, index) for index, day in enumerate(WEEKDAYS)],
         ]
     )
@@ -153,6 +155,69 @@ class DreameHoldSwitch(DreameHoldEntity, SwitchEntity):
         await self._set(self._off_value)
 
 
+class DreameHoldScheduledDryingEnabledSwitch(DreameHoldEntity, SwitchEntity):
+    """Master on/off for the whole "Scheduled roller brush drying" feature.
+
+    There's no separate boolean property for this - confirmed live by
+    isolating the app's own "Scheduled roller brush drying" toggle (with
+    every siid=1/16 property monitored) and seeing it write only
+    PROP_SCHEDULED_DRYING_TIME and PROP_SCHEDULED_DRYING_WEEKDAYS, both to
+    0, with nothing else involved. That's a poor fit for a raw
+    `time` entity's picker (0 just looks like midnight, not "off"), so
+    this switch wraps it: off means both properties are 0 (exactly what
+    the app itself does), on means whatever schedule was last configured.
+
+    Turning it back on restores `coordinator.last_known_schedule` (the
+    last non-zero time+weekday-mask pair seen) rather than leaving you to
+    re-enter the start time and every weekday switch from scratch - the
+    device itself has no memory of a cleared schedule, so without this
+    the "off means also forget everything" behavior would be a real UX
+    regression compared to just leaving the schedule configured but
+    (if such a thing existed) merely paused. Falls back to 15:00 with a
+    one-time (non-repeating) schedule if nothing has ever been observed
+    yet in this Home Assistant session.
+    """
+
+    entity_description = SwitchEntityDescription(
+        key="scheduled_drying_enabled",
+        name="Scheduled drying: 0 Enabled",
+        entity_category=EntityCategory.CONFIG,
+    )
+    _DEFAULT_SCHEDULE = (54000, 10000000)  # 15:00:00, one-time (no repeat)
+
+    def __init__(self, coordinator: DreameHoldDataUpdateCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.device.device_id}_{self.entity_description.key}"
+
+    @property
+    def is_on(self) -> bool | None:
+        value = self._property(PROP_SCHEDULED_DRYING_TIME)
+        if value is None:
+            return None
+        return value != 0
+
+    async def _set(self, time_value: int, mask_value: int) -> None:
+        time_siid, time_piid = PROP_SCHEDULED_DRYING_TIME
+        mask_siid, mask_piid = PROP_SCHEDULED_DRYING_WEEKDAYS
+        try:
+            await self.hass.async_add_executor_job(
+                self.coordinator.device.set_property, time_siid, time_piid, time_value
+            )
+            await self.hass.async_add_executor_job(
+                self.coordinator.device.set_property, mask_siid, mask_piid, mask_value
+            )
+        except Exception as ex:
+            raise HomeAssistantError(f"Failed to set scheduled drying enabled state: {ex}") from ex
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._set(0, 0)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        time_value, mask_value = self.coordinator.last_known_schedule or self._DEFAULT_SCHEDULE
+        await self._set(time_value, mask_value)
+
+
 class DreameHoldWeekdaySwitch(DreameHoldEntity, SwitchEntity):
     """One weekday bit of PROP_SCHEDULED_DRYING_WEEKDAYS.
 
@@ -172,6 +237,11 @@ class DreameHoldWeekdaySwitch(DreameHoldEntity, SwitchEntity):
     selection (see `derive_one_time_flag`) rather than preserving the
     previous flag.
 
+    Independent of "Automatic roller brush drying"
+    (PROP_AUTO_DRYING_DISABLED) - confirmed live that toggling that
+    switch doesn't affect this property either way (see that constant's
+    docstring), so availability isn't gated on it.
+
     Names are prefixed with a 1-7 index so Home Assistant's alphabetical
     entity sort still lands in Monday..Sunday order.
     """
@@ -185,12 +255,6 @@ class DreameHoldWeekdaySwitch(DreameHoldEntity, SwitchEntity):
         )
         self._day = day
         self._attr_unique_id = f"{coordinator.device.device_id}_{self.entity_description.key}"
-
-    @property
-    def available(self) -> bool:
-        if not super().available:
-            return False
-        return self._property(PROP_AUTO_DRYING_DISABLED) == 0
 
     @property
     def is_on(self) -> bool | None:
